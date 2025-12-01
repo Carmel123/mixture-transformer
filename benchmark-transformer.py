@@ -195,16 +195,16 @@ def benchmark():
     dim_fx = 2 * dim
     decoder_n_head = 2 * n_head
     
-    compressor_config = TransformerConfig(
-        block_size=block_size,
-        # chunk_size=chunk_size,
+    # compressor_config = TransformerConfig(
+    #     block_size=block_size,
+    #     # chunk_size=chunk_size,
 
-        n_layer=(n_layer // 4), # according to the paper, but can be changed
-        dim=dim,
-        n_head=n_head,
+    #     n_layer=(n_layer // 4), # according to the paper, but can be changed
+    #     dim=dim,
+    #     n_head=n_head,
 
-        # dim_fx=dim_fx,
-    )
+    #     # dim_fx=dim_fx,
+    # )
     decoder_config = TransformerConfig(
         block_size=block_size,
         # chunk_size=chunk_size,
@@ -213,7 +213,8 @@ def benchmark():
         dim=dim_fx,
         n_head=decoder_n_head,
     )
-    model = Transformer(decoder_config, compressor_config)
+    # model = Transformer(decoder_config, compressor_config)
+    model = Transformer(decoder_config)
     print(model)
 
     model.to(device=device, dtype=dtype)
