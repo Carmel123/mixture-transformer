@@ -203,7 +203,7 @@ def benchmark():
         dim=dim,
         n_head=n_head,
 
-        dim_fx=dim_fx,
+        # dim_fx=dim_fx,
     )
     decoder_config = TransformerConfig(
         block_size=block_size,

@@ -197,17 +197,17 @@ def benchmark():
     
     compressor_config = MixTransformerConfig(
         block_size=block_size,
-        chunk_size=chunk_size,
+        # chunk_size=chunk_size,
 
         n_layer=(n_layer // 4), # according to the paper, but can be changed
         dim=dim,
         n_head=n_head,
 
-        dim_fx=dim_fx,
+        # dim_fx=dim_fx,
     )
     decoder_config = MixTransformerConfig(
         block_size=block_size,
-        chunk_size=chunk_size,
+        # chunk_size=chunk_size,
 
         n_layer=n_layer,
         dim=dim_fx,
