@@ -17,8 +17,10 @@ import torch.nn as nn
 from torch import Tensor
 from torch.nn import functional as F
 
-from liger_kernel.transformers import LigerRMSNorm, liger_rotary_pos_emb, LigerFusedLinearCrossEntropyLoss
-from liger_kernel.ops.swiglu import LigerSiLUMulFunction
+# from liger_kernel.transformers import LigerRMSNorm, liger_rotary_pos_emb, LigerFusedLinearCrossEntropyLoss
+# from liger_kernel.ops.swiglu import LigerSiLUMulFunction
+
+from mamba_ssm.modules.mamba_simple import Mamba
 
 def find_multiple(n: int, k: int) -> int:
     '''find n such that n is a multiple of k'''
@@ -48,12 +50,13 @@ def get_mask_mod(mask_mod: _mask_mod_signature, offset: int):
     return _mask_mod
 
 @dataclass
-class TransformerConfig:
+class MixTransformerConfig:
     block_size: int = 2048
     vocab_size: int = 32000
     padded_vocab_size: Optional[int] = None
 
     n_layer: int = 6
+    n_expert: int = 2
     n_head: int = 12
     dim: int = 768
     intermediate_size: Optional[int] = None
@@ -63,6 +66,10 @@ class TransformerConfig:
     rope_base: float = 10000
     norm_eps: float = 1e-5
     rope_n_elem: Optional[int] = None
+
+    # ssm
+    temperature: float = 1
+    return_logits: bool = False
 
     # optional
     use_fused_ops: bool = False
@@ -83,22 +90,24 @@ class TransformerConfig:
         self.rope_n_elem = self.head_dim
 
 
-class Transformer(nn.Module):
-    def __init__(self, config: TransformerConfig) -> None: 
+class MixTransformer(nn.Module):
+    def __init__(self, config: MixTransformerConfig) -> None: 
         super().__init__()
         self.config = config
 
         self.wte = nn.Embedding(config.padded_vocab_size, config.dim)
-        self.layers = nn.ModuleList(TransformerBlock(config, layer_idx=i) for i in range(config.n_layer))
+        self.layers = nn.ModuleList(MixtureTransformerBlock(config, layer_idx=i) for i in range(config.n_layer))
         
         if self.config.use_fused_ops:
-            self.norm = LigerRMSNorm(config.dim, eps=config.norm_eps)
+            # self.norm = LigerRMSNorm(config.dim, eps=config.norm_eps)
+            print('using liger')
         else:
             self.norm = RMSNorm(config.dim, eps=config.norm_eps)
         self.output = nn.Linear(config.dim, config.padded_vocab_size, bias=False)
 
         if self.config.use_fused_ops:
-            self.fused_linear_cross_entropy = LigerFusedLinearCrossEntropyLoss(ignore_index=-100)
+            # self.fused_linear_cross_entropy = LigerFusedLinearCrossEntropyLoss(ignore_index=-100)
+            print('using liger')
         
         # initialize weights
         self.apply(lambda m: _init_weights(m, self.config.n_layer, self.config.dim))
@@ -167,33 +176,84 @@ class Transformer(nn.Module):
         return logits
 
 
-class TransformerBlock(nn.Module):
-    def __init__(self, config: TransformerConfig, layer_idx: int) -> None:
+class MixtureTransformerBlock(nn.Module):
+    def __init__(self, config: MixTransformerConfig, layer_idx: int) -> None:
         super().__init__()
         self.config = config
 
-        self.attention = Attention(config, layer_idx)
+        self.router = Router(config, layer_idx)
+        # make more modular by replacing Attention
+        self.experts = nn.ModuleList(Attention(config, layer_idx=i) for i in range(config.n_expert))
 
         if config.use_fused_ops:
-            self.feed_forward = LigerSwiGLUMLP(config)
+            # self.feed_forward = LigerSwiGLUMLP(config)
+            print('using liger')
         else:
             self.feed_forward = LLaMAMLP(config)
 
         if self.config.use_fused_ops:
-            self.ffn_norm = LigerRMSNorm(config.dim, eps=config.norm_eps)
-            self.attention_norm = LigerRMSNorm(config.dim, eps=config.norm_eps)
+            print('using liger')
+            # self.ffn_norm = LigerRMSNorm(config.dim, eps=config.norm_eps)
+            # self.attention_norm = LigerRMSNorm(config.dim, eps=config.norm_eps)
         else:
             self.ffn_norm = RMSNorm(config.dim, eps=config.norm_eps)
             self.attention_norm = RMSNorm(config.dim, eps=config.norm_eps)
 
     def forward(self, x: Tensor, cos: Tensor, sin: Tensor, is_causal: Optional[bool] = True, mask: Optional[BlockMask] = None, input_pos: Optional[Tensor] = None) -> Tensor:
-        h = x + self.attention(self.attention_norm(x), cos, sin, is_causal, mask=mask, input_pos=input_pos)
+        p = self.router(x)
+        
+        exp_out = [self.experts(x, cos, sin, is_causal, mask, input_pos) for expert in self.experts]
+        # TODO: Undo hardcoding of 2 experts
+        h = x + torch.mul(exp_out[0], p[0]) + torch.mul(exp_out[1], p[1])
+
         out = h + self.feed_forward(self.ffn_norm(h))
         return out
 
 
+class Router(nn.Module):
+    def __init__(self, config: MixTransformerConfig, layer_idx: int) -> None:
+        super().__init__()
+        self.config = config
+
+        if config.temperature <= 0.0:
+            raise ValueError("temperature must be > 0.")
+        
+        self.temperature = config.temperature
+        self.return_logits = config.return_logits
+
+        self.ssm = Mamba(config.dim)
+        self.ffn = nn.Linear(config.dim, config.n_expert)
+
+        if config.use_fused_ops:
+            print('using liger')
+            # self.feed_forward = LigerSwiGLUMLP(config)
+        else:
+            self.feed_forward = LLaMAMLP(config)
+
+        if self.config.use_fused_ops:
+            print('using liger')
+            # self.attention_norm = LigerRMSNorm(config.dim, eps=config.norm_eps)
+        else:
+            self.attention_norm = RMSNorm(config.dim, eps=config.norm_eps)
+
+    def forward(self, x: Tensor, cos: Tensor, sin: Tensor, is_causal: Optional[bool] = True, mask: Optional[BlockMask] = None, input_pos: Optional[Tensor] = None) -> Tensor:
+        h1 = self.ssm(x)
+        logits = self.ffn(h1)
+
+        if self.temperature != 1.0:
+            scaled_logits = logits / self.temperature
+        else:
+            scaled_logits = logits
+        
+        p = F.softmax(scaled_logits, dim=-1)
+
+        if self.return_logits:
+            return p, logits
+        return p
+   
+
 class Attention(nn.Module):
-    def __init__(self, config: TransformerConfig, layer_idx: int) -> None:
+    def __init__(self, config: MixTransformerConfig, layer_idx: int) -> None:
         super().__init__()
         # key, query and value projections for all heads, but in a batch
         self.wqkv = nn.Linear(
@@ -217,8 +277,9 @@ class Attention(nn.Module):
 
         if self.config.use_qk_norm:
             if self.config.use_fused_ops:
-                self.q_norm = LigerRMSNorm(config.head_dim, eps=config.norm_eps)
-                self.k_norm = LigerRMSNorm(config.head_dim, eps=config.norm_eps)
+                print('using liger')
+                # self.q_norm = LigerRMSNorm(config.head_dim, eps=config.norm_eps)
+                # self.k_norm = LigerRMSNorm(config.head_dim, eps=config.norm_eps)
             else:
                 self.q_norm = RMSNorm(config.head_dim, eps=config.norm_eps)
                 self.k_norm = RMSNorm(config.head_dim, eps=config.norm_eps)
@@ -241,7 +302,8 @@ class Attention(nn.Module):
         q, k, v = map(lambda x: x.transpose(1, 2), (q, k, v))
 
         if self.config.use_fused_ops:
-            q, k = liger_rotary_pos_emb(q, k, cos, sin)
+            print('using liger')
+            # q, k = liger_rotary_pos_emb(q, k, cos, sin)
         else:
             q = apply_rope_emb(q, cos, sin, self.rope_n_elem) # (B, n_head, N, head_dim)
             k = apply_rope_emb(k, cos, sin, self.rope_n_elem) # (B, n_local_heads, N, head_dim)
@@ -271,7 +333,7 @@ class Attention(nn.Module):
 
 # https://github.com/Lightning-AI/litgpt/blob/048633a7d08f75280e1f02fcd0ba58a7e47dfeb1/litgpt/model.py#L531
 class LLaMAMLP(nn.Module):
-    def __init__(self, config: TransformerConfig) -> None:
+    def __init__(self, config: MixTransformerConfig) -> None:
         super().__init__()
         self.fc_1 = nn.Linear(config.dim, config.intermediate_size, bias=False)
         self.fc_2 = nn.Linear(config.dim, config.intermediate_size, bias=False)
@@ -294,7 +356,8 @@ class LigerSwiGLUMLP(nn.Module):
         self.proj = nn.Linear(config.intermediate_size, config.dim, bias=False)
 
     def forward(self, x):
-        return self.proj(LigerSiLUMulFunction.apply(self.fc_1(x), self.fc_2(x)))
+        # return self.proj(LigerSiLUMulFunction.apply(self.fc_1(x), self.fc_2(x)))
+        return x
 
 
 # https://github.com/Lightning-AI/litgpt/blob/048633a7d08f75280e1f02fcd0ba58a7e47dfeb1/litgpt/model.py#L812
@@ -490,15 +553,15 @@ if __name__ == "__main__":
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    config = TransformerConfig(
+    config = MixTransformerConfig(
         block_size=2048,
         n_layer=12,
 
         n_head=12,
-        dim=768,
+        dim=768/2,
         # use_fused_ops=True,
     )
-    model = Transformer(config)
+    model = MixTransformer(config)
     model.to(device)
     model.setup_cache(device=device) # setup RoPE cache
 

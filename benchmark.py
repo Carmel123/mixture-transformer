@@ -22,21 +22,26 @@ create_block_mask = torch.compile(create_block_mask)
 torch._inductor.config.fx_graph_cache = True 
 torch._functorch.config.enable_autograd_cache = True
 
-from transformer import (
-    TransformerConfig,
-    Transformer
+# from transformer import (
+#     TransformerConfig,
+#     Transformer
+# )
+
+from mix_transformer import (
+    MixTransformerConfig,
+    MixTransformer
 )
 
-from cat_transformer import (
-    CAT_Config,
-    CAT_Transformer
-)
+# from cat_transformer import (
+#     CAT_Config,
+#     CAT_Transformer
+# )
 
 # slow autoregressive generation for correctness checking
 # or can be used for accuracy benchmarks
 @torch.no_grad()
 def generate_autoregressive_slow(
-    input_ids: Tensor, model: CAT_Transformer, num_new_tokens: int
+    input_ids: Tensor, model: MixTransformer, num_new_tokens: int
 ):
     cur_input_ids = input_ids.clone()
     for _ in range(num_new_tokens):
@@ -53,7 +58,7 @@ def generate_autoregressive_slow(
 def causal_mask(b, h, q, kv):
     return q >= kv
 
-def prefill_fx(model: CAT_Transformer, fx, input_pos, rope_pos, block_mask):
+def prefill_fx(model: MixTransformer, fx, input_pos, rope_pos, block_mask):
     assert input_pos.shape[-1] == 1
 
     block_index = input_pos // block_mask.BLOCK_SIZE[0]
@@ -72,7 +77,7 @@ def prefill_fx(model: CAT_Transformer, fx, input_pos, rope_pos, block_mask):
     return next_token
 
 # we change this slightly
-def decode_one_token(model: CAT_Transformer, x: torch.Tensor, input_pos: torch.Tensor, rope_pos: torch.Tensor, block_mask: BlockMask):
+def decode_one_token(model: MixTransformer, x: torch.Tensor, input_pos: torch.Tensor, rope_pos: torch.Tensor, block_mask: BlockMask):
     # input_pos: [B, 1]
     # print("input pos:", input_pos.shape)
     assert input_pos.shape[-1] == 1
@@ -90,7 +95,7 @@ def decode_one_token(model: CAT_Transformer, x: torch.Tensor, input_pos: torch.T
     return next_token
 
 # we change this slightly
-def decode_n_tokens(model: CAT_Transformer, cur_token: torch.Tensor, input_pos: torch.Tensor, rope_pos: torch.Tensor, num_new_tokens: int, block_mask):
+def decode_n_tokens(model: MixTransformer, cur_token: torch.Tensor, input_pos: torch.Tensor, rope_pos: torch.Tensor, num_new_tokens: int, block_mask):
     # new_tokens, new_probs = [], []
     new_tokens = []
     for i in range(num_new_tokens):
@@ -106,7 +111,7 @@ def decode_n_tokens(model: CAT_Transformer, cur_token: torch.Tensor, input_pos: 
 
     return new_tokens
 
-def generate_chunk(model: CAT_Transformer, fx, input_pos, rope_pos, block_mask):
+def generate_chunk(model: MixTransformer, fx, input_pos, rope_pos, block_mask):
     # fx: (B, 1, D)
     # chunk_idx: [1]
 
@@ -124,7 +129,7 @@ def generate_chunk(model: CAT_Transformer, fx, input_pos, rope_pos, block_mask):
 # https://github.com/pytorch-labs/gpt-fast/blob/7dd5661e2adf2edd6a1042a2732dcd3a94064ad8/generate.py#L154
 @torch.no_grad()
 def generate_chunk_by_chunk(
-    input_ids: Tensor, model: CAT_Transformer, # num_new_tokens: int
+    input_ids: Tensor, model: MixTransformer, # num_new_tokens: int
 ):
     bsz = input_ids.shape[0]
     assert input_ids.shape[1] % model.config.chunk_size == 0
@@ -190,7 +195,7 @@ def benchmark():
     dim_fx = 2 * dim
     decoder_n_head = 2 * n_head
     
-    compressor_config = CAT_Config(
+    compressor_config = MixTransformerConfig(
         block_size=block_size,
         chunk_size=chunk_size,
 
@@ -200,7 +205,7 @@ def benchmark():
 
         dim_fx=dim_fx,
     )
-    decoder_config = CAT_Config(
+    decoder_config = MixTransformerConfig(
         block_size=block_size,
         chunk_size=chunk_size,
 
@@ -208,7 +213,7 @@ def benchmark():
         dim=dim_fx,
         n_head=decoder_n_head,
     )
-    model = CAT_Transformer(decoder_config, compressor_config)
+    model = MixTransformer(decoder_config, compressor_config)
     print(model)
 
     model.to(device=device, dtype=dtype)
