@@ -197,7 +197,7 @@ def benchmark():
     
     compressor_config = TransformerConfig(
         block_size=block_size,
-        chunk_size=chunk_size,
+        # chunk_size=chunk_size,
 
         n_layer=(n_layer // 4), # according to the paper, but can be changed
         dim=dim,
@@ -207,7 +207,7 @@ def benchmark():
     )
     decoder_config = TransformerConfig(
         block_size=block_size,
-        chunk_size=chunk_size,
+        # chunk_size=chunk_size,
 
         n_layer=n_layer,
         dim=dim_fx,
