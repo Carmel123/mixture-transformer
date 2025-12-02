@@ -188,9 +188,9 @@ class MixtureTransformerBlock(nn.Module):
         # Ideally, one can free them before sending the
         # experts to the MoE; in that case the following three
         # lines can be commented out.
-        for expert in self.experts:
-            for param in expert.parameters():
-                param.requires_grad = False
+        # for expert in self.experts:
+        #     for param in expert.parameters():
+        #         param.requires_grad = False
 
         # TODO: Is this ^^ reasonable for this case??
 
