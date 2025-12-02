@@ -64,7 +64,7 @@ def prefill_fx(model: Transformer, fx, input_pos, rope_pos, block_mask):
     block_index = input_pos // block_mask.BLOCK_SIZE[0]
     mask = block_mask[:, :, block_index]
     mask.mask_mod = block_mask.mask_mod
-    mask.seq_lengths = (1, (model.config.num_chunks + model.config.chunk_size))
+    # mask.seq_lengths = (1, (model.config.num_chunks + model.config.chunk_size))
     # print("input pos for fx:", input_pos.shape)
     # [B, l, V]
     # logits = model(None, input_ids=input_ids, input_pos=input_pos, mask=mask)
@@ -77,7 +77,9 @@ def prefill_fx(model: Transformer, fx, input_pos, rope_pos, block_mask):
     return next_token
 
 # we change this slightly
-def decode_one_token(model: Transformer, x: torch.Tensor, input_pos: torch.Tensor, rope_pos: torch.Tensor, block_mask: BlockMask):
+def decode_one_token(model: Transformer, x: torch.Tensor, 
+                    input_pos: torch.Tensor, rope_pos: torch.Tensor, 
+                    block_mask: BlockMask):
     # input_pos: [B, 1]
     # print("input pos:", input_pos.shape)
     assert input_pos.shape[-1] == 1
@@ -85,7 +87,7 @@ def decode_one_token(model: Transformer, x: torch.Tensor, input_pos: torch.Tenso
     block_index = input_pos // block_mask.BLOCK_SIZE[0]
     mask = block_mask[:, :, block_index]
     mask.mask_mod = block_mask.mask_mod
-    mask.seq_lengths = (1, (model.config.num_chunks + model.config.chunk_size))
+    # mask.seq_lengths = (1, (model.config.num_chunks + model.config.chunk_size))
 
     logits = model.forward_embeddings(x, input_pos=input_pos, rope_pos=rope_pos, mask=mask, is_input_token=True)
     logits = logits[:, -1, ...]
@@ -95,7 +97,9 @@ def decode_one_token(model: Transformer, x: torch.Tensor, input_pos: torch.Tenso
     return next_token
 
 # we change this slightly
-def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torch.Tensor, rope_pos: torch.Tensor, num_new_tokens: int, block_mask):
+def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, 
+                    input_pos: torch.Tensor, rope_pos: torch.Tensor, 
+                    num_new_tokens: int, block_mask):
     # new_tokens, new_probs = [], []
     new_tokens = []
     for i in range(num_new_tokens):
@@ -186,7 +190,8 @@ def benchmark():
     block_size = 2048 # context length
     chunk_size = 8
     
-    n_layer = 12
+    # n_layer = 12
+    n_layer = 1
     dim = 768
     n_head = 12
 

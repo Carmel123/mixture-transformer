@@ -5,6 +5,7 @@ Nothing fancy here :)
 Parts of it were taken from:
 1. https://github.com/pytorch-labs/gpt-fast
 2. https://github.com/Lightning-AI/litgpt
+3. https://medium.com/@prateeksikdar/understanding-mixture-of-experts-building-a-moe-model-with-pytorch-dd373d9db81c
 
 """
 
@@ -17,10 +18,8 @@ import torch.nn as nn
 from torch import Tensor
 from torch.nn import functional as F
 
-# from liger_kernel.transformers import LigerRMSNorm, liger_rotary_pos_emb, LigerFusedLinearCrossEntropyLoss
-# from liger_kernel.ops.swiglu import LigerSiLUMulFunction
-
-from mamba_ssm.modules.mamba_simple import Mamba
+from liger_kernel.transformers import LigerRMSNorm, liger_rotary_pos_emb, LigerFusedLinearCrossEntropyLoss
+from liger_kernel.ops.swiglu import LigerSiLUMulFunction
 
 def find_multiple(n: int, k: int) -> int:
     '''find n such that n is a multiple of k'''
@@ -67,9 +66,8 @@ class MixTransformerConfig:
     norm_eps: float = 1e-5
     rope_n_elem: Optional[int] = None
 
-    # ssm
-    temperature: float = 1
-    return_logits: bool = False
+    # for gating
+    dropout_rate: float = 0.1
 
     # optional
     use_fused_ops: bool = False
@@ -184,30 +182,43 @@ class MixtureTransformerBlock(nn.Module):
         self.router = Router(config, layer_idx)
         # make more modular by replacing Attention
         self.experts = nn.ModuleList(Attention(config, layer_idx=i) for i in range(config.n_expert))
+        
+        # Freezing the experts to ensure that they are not
+        # learning when MoE is training.
+        # Ideally, one can free them before sending the
+        # experts to the MoE; in that case the following three
+        # lines can be commented out.
+        for expert in self.experts:
+            for param in expert.parameters():
+                param.requires_grad = False
+
+        # TODO: Is this ^^ reasonable for this case??
 
         if config.use_fused_ops:
-            # self.feed_forward = LigerSwiGLUMLP(config)
-            print('using liger')
+            self.feed_forward = LigerSwiGLUMLP(config)
         else:
             self.feed_forward = LLaMAMLP(config)
 
         if self.config.use_fused_ops:
-            print('using liger')
-            # self.ffn_norm = LigerRMSNorm(config.dim, eps=config.norm_eps)
-            # self.attention_norm = LigerRMSNorm(config.dim, eps=config.norm_eps)
+            self.ffn_norm = LigerRMSNorm(config.dim, eps=config.norm_eps)
+            self.attention_norm = LigerRMSNorm(config.dim, eps=config.norm_eps)
         else:
             self.ffn_norm = RMSNorm(config.dim, eps=config.norm_eps)
             self.attention_norm = RMSNorm(config.dim, eps=config.norm_eps)
 
     def forward(self, x: Tensor, cos: Tensor, sin: Tensor, is_causal: Optional[bool] = True, mask: Optional[BlockMask] = None, input_pos: Optional[Tensor] = None) -> Tensor:
-        p = self.router(x)
+        # weights from router
+        weights = self.router(x)
         
-        exp_out = [self.experts(x, cos, sin, is_causal, mask, input_pos) for expert in self.experts]
-        # TODO: Undo hardcoding of 2 experts
-        h = x + torch.mul(exp_out[0], p[0]) + torch.mul(exp_out[1], p[1])
+        # expert outputs
+        exp_out = torch.stack(
+            [self.experts(x, cos, sin, is_causal, mask, input_pos) for expert in self.experts],
+            dim=2)
+        
+        # adjust size to match expert outputs
+        weights = torch.unsqueeze(weights, 1).expand_as(exp_out)
 
-        out = h + self.feed_forward(self.ffn_norm(h))
-        return out
+        return torch.sum(exp_out * weights, dim=2)
 
 
 class Router(nn.Module):
@@ -215,41 +226,39 @@ class Router(nn.Module):
         super().__init__()
         self.config = config
 
-        if config.temperature <= 0.0:
-            raise ValueError("temperature must be > 0.")
-        
-        self.temperature = config.temperature
-        self.return_logits = config.return_logits
+        # Layers
+        self.layer1 = nn.Linear(config.dim, 128)
+        self.dropout1 = nn.Dropout(config.dropout_rate)
 
-        self.ssm = Mamba(config.dim)
-        self.ffn = nn.Linear(config.dim, config.n_expert)
+        self.layer2 = nn.Linear(128, 256)
+        self.leaky_relu1 = nn.LeakyReLU()
+        self.dropout2 = nn.Dropout(config.dropout_rate)
+
+        self.layer3 = nn.Linear(256, 128)
+        self.leaky_relu2 = nn.LeakyReLU()
+        self.dropout3 = nn.Dropout(config.dropout_rate)
+
+        self.layer4 = nn.Linear(128, config.n_expert)
 
         if config.use_fused_ops:
-            print('using liger')
-            # self.feed_forward = LigerSwiGLUMLP(config)
+            self.feed_forward = LigerSwiGLUMLP(config)
         else:
             self.feed_forward = LLaMAMLP(config)
 
-        if self.config.use_fused_ops:
-            print('using liger')
-            # self.attention_norm = LigerRMSNorm(config.dim, eps=config.norm_eps)
-        else:
-            self.attention_norm = RMSNorm(config.dim, eps=config.norm_eps)
 
     def forward(self, x: Tensor, cos: Tensor, sin: Tensor, is_causal: Optional[bool] = True, mask: Optional[BlockMask] = None, input_pos: Optional[Tensor] = None) -> Tensor:
-        h1 = self.ssm(x)
-        logits = self.ffn(h1)
+        x = torch.relu(self.layer1(x))
+        x = self.dropout1(x)
 
-        if self.temperature != 1.0:
-            scaled_logits = logits / self.temperature
-        else:
-            scaled_logits = logits
-        
-        p = F.softmax(scaled_logits, dim=-1)
+        x = self.layer2(x)
+        x = self.leaky_relu1(x)
+        x = self.dropout2(x)
 
-        if self.return_logits:
-            return p, logits
-        return p
+        x = self.layer3(x)
+        x = self.leaky_relu2(x)
+        x = self.dropout3(x)
+
+        return torch.softmax(self.layer4(x), dim=1)
    
 
 class Attention(nn.Module):
