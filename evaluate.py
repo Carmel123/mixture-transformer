@@ -8,6 +8,8 @@ from torch.utils.data import Dataset, DataLoader
 
 from transformer import Transformer, TransformerConfig
 
+from mix_transformer import MixTransformer, MixTransformerConfig
+
 # -----------------------------
 # Configuration
 # -----------------------------
@@ -96,9 +98,9 @@ def train(model, dataloader, optimizer):
     }
 
 
-# -----------------------------
-# Evaluation (Perplexity)
-# -----------------------------
+# --------------
+# Evaluation 
+# --------------
 
 @torch.no_grad()
 def evaluate(model, dataloader):
@@ -142,22 +144,23 @@ def main():
     project="mixture-transformer",
     config={
         "learning_rate": LR,
-        "architecture": "Transformer",
+        "architecture": "Mix-Transformer",
         "dataset": "Random",
         "train_steps": TRAIN_STEPS,
-    })
+    },)
 
     # Model config
-    config = TransformerConfig(
+    config = MixTransformerConfig(
         block_size=BLOCK_SIZE,
         vocab_size=VOCAB_SIZE,
         n_layer=6,
         n_head=8,
-        dim=512,
+        dim=512/2,
         use_fused_ops=False,
+        n_expert=2
     )
 
-    model = Transformer(config).to(DEVICE)
+    model = MixTransformer(config).to(DEVICE)
     model.setup_cache(device=DEVICE)
 
     if DEVICE == "cuda":
