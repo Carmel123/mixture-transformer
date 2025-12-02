@@ -1,7 +1,9 @@
-# benchmark.py
+# evaluate.py
 import time
 import math
 import torch
+import wandb
+
 from torch.utils.data import Dataset, DataLoader
 
 from transformer import Transformer, TransformerConfig
@@ -32,7 +34,7 @@ torch.manual_seed(0)
 
 class RandomTokenDataset(Dataset):
     """
-    Generates random token sequences for language modeling:
+    Generates random token sequences:
     input_ids[:-1] -> input_ids[1:]
     """
     def __init__(self, num_samples, block_size, vocab_size):
@@ -134,6 +136,17 @@ def evaluate(model, dataloader):
 # -----------------------------
 
 def main():
+
+    run = wandb.init(
+    entity="anemia-pred",
+    project="mixture-transformer",
+    config={
+        "learning_rate": LR,
+        "architecture": "Transformer",
+        "dataset": "Random",
+        "train_steps": TRAIN_STEPS,
+    })
+
     # Model config
     config = TransformerConfig(
         block_size=BLOCK_SIZE,
@@ -178,7 +191,7 @@ def main():
         pin_memory=True,
     )
 
-    # Warmup (important for wall-clock benchmarking)
+    # Warmup
     print("Warming up...")
     x, y = next(iter(train_loader))
     x, y = x.to(DEVICE), y.to(DEVICE)
@@ -186,15 +199,19 @@ def main():
         loss = model(x, labels=y)
         loss.backward()
         optimizer.zero_grad(set_to_none=True)
+        run.log({"loss": loss})
+
     torch.cuda.synchronize() if DEVICE == "cuda" else None
 
     # Training benchmark
     print("\nStarting training benchmark...")
     train_stats = train(model, train_loader, optimizer)
+    run.log(train_stats)
 
     # Evaluation benchmark
     print("\nStarting evaluation...")
     eval_stats = evaluate(model, eval_loader)
+    run.log()
 
     # Results
     print("\n================ RESULTS ================")
