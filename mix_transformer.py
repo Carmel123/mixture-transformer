@@ -211,9 +211,7 @@ class MixtureTransformerBlock(nn.Module):
         weights = self.router(x)
         
         # expert outputs
-        exp_out = torch.stack(
-            [self.experts(x, cos, sin, is_causal, mask, input_pos) for expert in self.experts],
-            dim=2)
+        exp_out = torch.stack([self.experts(x, cos, sin, is_causal, mask, input_pos) for expert in self.experts], dim=2)
         
         # adjust size to match expert outputs
         weights = torch.unsqueeze(weights, 1).expand_as(exp_out)
