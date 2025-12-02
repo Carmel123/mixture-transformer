@@ -211,7 +211,7 @@ def main():
     # Evaluation benchmark
     print("\nStarting evaluation...")
     eval_stats = evaluate(model, eval_loader)
-    run.log()
+    run.log(eval_stats)
 
     # Results
     print("\n================ RESULTS ================")
