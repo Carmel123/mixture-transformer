@@ -155,7 +155,8 @@ def main():
         vocab_size=VOCAB_SIZE,
         n_layer=6,
         n_head=8,
-        dim=512/2,
+        # dim=512, for transformer
+        dim = 256 # for mix transformer
         use_fused_ops=False,
         n_expert=2
     )
