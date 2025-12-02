@@ -246,7 +246,7 @@ class Router(nn.Module):
             self.feed_forward = LLaMAMLP(config)
 
 
-    def forward(self, x: Tensor, cos: Tensor, sin: Tensor, is_causal: Optional[bool] = True, mask: Optional[BlockMask] = None, input_pos: Optional[Tensor] = None) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:
         x = torch.relu(self.layer1(x))
         x = self.dropout1(x)
 

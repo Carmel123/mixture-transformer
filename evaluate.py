@@ -156,9 +156,9 @@ def main():
         n_layer=6,
         n_head=8,
         # dim=512, for transformer
-        dim = 256 # for mix transformer
+        dim = 256, # for mix transformer
         use_fused_ops=False,
-        n_expert=2
+        n_expert=2 # for mix transformer
     )
 
     model = MixTransformer(config).to(DEVICE)
