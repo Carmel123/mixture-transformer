@@ -206,7 +206,7 @@ def main():
     x, y = next(iter(train_loader))
     x, y = x.to(DEVICE), y.to(DEVICE)
     for _ in range(5):
-        loss = model(x, labels=y)
+        loss, loss_dict = model(x, labels=y)
         loss.backward()
         optimizer.zero_grad(set_to_none=True)
         run.log({"loss": loss})
