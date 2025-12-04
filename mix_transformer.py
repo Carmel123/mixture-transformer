@@ -155,8 +155,8 @@ class MixTransformer(nn.Module):
             cos = self.cos[:, :seqlen]
             sin = self.sin[:, :seqlen]
 
-        tot_aux_loss = torch.tensor(0.0, device=x.device)
         x = self.wte(input_ids)
+        tot_aux_loss = torch.tensor(0.0, device=x.device)
         for i, layer in enumerate(self.layers):
             x, aux_loss = layer(x, cos, sin, mask=mask, input_pos=input_pos)
             tot_aux_loss += aux_loss
