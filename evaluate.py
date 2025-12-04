@@ -74,7 +74,11 @@ def train(model, dataloader, optimizer):
 
         optimizer.zero_grad(set_to_none=True)
 
-        loss = model(x, labels=y)
+        # For Transformer:
+        # loss = model(x, labels=y)
+
+        # For MixTransformer
+        loss, loss_dict = model(x, labels=y)
         loss.backward()
         optimizer.step()
 
@@ -95,6 +99,8 @@ def train(model, dataloader, optimizer):
         "train_loss": total_loss / TRAIN_STEPS,
         "train_time_sec": elapsed,
         "tokens_per_sec": tokens_per_sec,
+        'train_lm_loss': loss_dict['lm_loss'].item(),
+        'train_aux_loss': loss_dict['aux_loss'].item()
     }
 
 
@@ -117,7 +123,7 @@ def evaluate(model, dataloader):
         x = x.to(DEVICE)
         y = y.to(DEVICE)
 
-        loss = model(x, labels=y)
+        loss, loss_dict = model(x, labels=y)
 
         total_loss += loss.item() * x.numel()
         total_tokens += x.numel()

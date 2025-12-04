@@ -68,6 +68,7 @@ class MixTransformerConfig:
 
     # for gating
     dropout_rate: float = 0.1
+    aux_weight: float = 0.01
 
     # optional
     use_fused_ops: bool = False
@@ -154,10 +155,14 @@ class MixTransformer(nn.Module):
             cos = self.cos[:, :seqlen]
             sin = self.sin[:, :seqlen]
 
+        tot_aux_loss = torch.tensor(0.0, device=x.device)
         x = self.wte(input_ids)
         for i, layer in enumerate(self.layers):
-            x = layer(x, cos, sin, mask=mask, input_pos=input_pos)
+            x, aux_loss = layer(x, cos, sin, mask=mask, input_pos=input_pos)
+            tot_aux_loss += aux_loss
+        
         x = self.norm(x)
+        tot_aux_loss = tot_aux_loss / len(self.layers)
 
         if labels is not None:
             if self.config.use_fused_ops:
@@ -167,8 +172,12 @@ class MixTransformer(nn.Module):
                 return loss
             else:
                 logits = self.output(x)
-                loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.view(-1), ignore_index=-100)
-                return loss
+                lm_loss = F.cross_entropy(logits.view(-1, 
+                                        logits.size(-1)),
+                                        labels.view(-1),
+                                        ignore_index=-100)
+                loss = lm_loss + self.config.aux_weight * tot_aux_loss
+                return loss, {'lm_loss': lm_loss.detach(), 'aux_loss': tot_aux_loss.detach()}
         
         logits = self.output(x)
         return logits
@@ -207,8 +216,13 @@ class MixtureTransformerBlock(nn.Module):
             self.attention_norm = RMSNorm(config.dim, eps=config.norm_eps)
 
     def forward(self, x: Tensor, cos: Tensor, sin: Tensor, is_causal: Optional[bool] = True, mask: Optional[BlockMask] = None, input_pos: Optional[Tensor] = None) -> Tensor:
+        aux_loss = torch.tensor(0.0, device=x.device)
+
         # weights from router
         weights = self.router(x)
+        usage = weights.mean(dim=(0, 1))
+        uniform = torch.full_like(usage, 1.0 / self.config.n_expert)
+        aux_loss = torch.sum(usage * torch.log(usage / uniform))
         
         # expert outputs
         exp_out = torch.stack(
@@ -217,8 +231,9 @@ class MixtureTransformerBlock(nn.Module):
         # adjust size to match expert outputs
         # weights = weights.unsqueeze(1).expand_as(exp_out)
         weights = weights.unsqueeze(-1)
+        out = torch.sum(exp_out * weights, dim=2)
 
-        return torch.sum(exp_out * weights, dim=2)
+        return out, aux_loss
 
 
 class Router(nn.Module):
