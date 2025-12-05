@@ -122,7 +122,7 @@ class WikiTextDataset(Dataset):
 # Training
 # -----------------------------
 
-def train(model, dataloader, optimizer, n_epochs):
+def train(model, dataloader, optimizer, n_epochs, arch):
     model.train()
     start_time = time.perf_counter()
 
@@ -143,11 +143,10 @@ def train(model, dataloader, optimizer, n_epochs):
 
             optimizer.zero_grad(set_to_none=True)
 
-            # For Transformer:
-            # loss = model(x, labels=y)
-
-            # For MixTransformer
-            loss, loss_dict = model(x, labels=y)
+            if arch:
+                loss = model(x, labels=y)
+            else:
+                loss, loss_dict = model(x, labels=y)
             loss.backward()
             optimizer.step()
 
@@ -155,15 +154,24 @@ def train(model, dataloader, optimizer, n_epochs):
             total_tokens += tokens
             total_loss += loss.item()
 
-            wandb.log(
-                {
-                    "train/loss": loss.item(),
-                    'train/aux_loss': loss_dict['aux_loss'],
-                    'train/lm_loss': loss_dict['lm_loss'],
-                    'train/epoch': epoch,
-                    'train/tokens_seen': total_tokens
-                }
-            )
+            if arch:
+                wandb.log(
+                    {
+                        "train/loss": loss.item(),
+                        'train/epoch': epoch,
+                        'train/tokens_seen': total_tokens
+                    }
+                )
+            else:
+                wandb.log(
+                    {
+                        "train/loss": loss.item(),
+                        'train/aux_loss': loss_dict['aux_loss'],
+                        'train/lm_loss': loss_dict['lm_loss'],
+                        'train/epoch': epoch,
+                        'train/tokens_seen': total_tokens
+                    }
+                )
 
             if step % LOG_EVERY == 0:
                 print(
@@ -174,15 +182,18 @@ def train(model, dataloader, optimizer, n_epochs):
         elapsed = time.perf_counter() - start_time
         tokens_per_sec = total_tokens / elapsed
 
-    return {
+    out = {
         # "train_loss": total_loss / TRAIN_STEPS,
         'avl_loss': total_loss / global_step,
         'avg_nll': total_loss / total_tokens,
         "train_time_sec": elapsed,
         "tokens_per_sec": tokens_per_sec,
-        'train_lm_loss': loss_dict['lm_loss'].item(),
-        'train_aux_loss': loss_dict['aux_loss'].item()
     }
+    if not arch:
+        out['train_lm_loss'] = loss_dict['lm_loss'].item()
+        out['train_aux_loss'] = loss_dict['aux_loss'].item()
+
+    return out
 
 
 # --------------
@@ -190,7 +201,7 @@ def train(model, dataloader, optimizer, n_epochs):
 # --------------
 
 @torch.no_grad()
-def evaluate(model, dataloader):
+def evaluate(model, dataloader, arch):
     model.eval()
 
     start_time = time.perf_counter()
@@ -204,7 +215,10 @@ def evaluate(model, dataloader):
         x = x.to(DEVICE)
         y = y.to(DEVICE)
 
-        loss, loss_dict = model(x, labels=y)
+        if arch:
+            loss = model(x, labels=y)
+        else:
+            loss, _ = model(x, labels=y)
 
         total_loss += loss.item() * x.numel()
         total_tokens += x.numel()
@@ -369,7 +383,10 @@ def main(arch, data, n_epochs):
     y = batch["labels"].to(DEVICE)
 
     for _ in range(WARMUP_STEPS):
-        loss, _ = model(x, labels=y)
+        if arch:
+            loss = model(x, labels=y)
+        else:
+            loss, _ = model(x, labels=y)
         loss.backward()
         optimizer.zero_grad(set_to_none=True)
 
@@ -377,7 +394,7 @@ def main(arch, data, n_epochs):
 
     # Training benchmark
     print("\nStarting training benchmark...")
-    train_stats = train(model, train_loader, optimizer, n_epochs)
+    train_stats = train(model, train_loader, optimizer, n_epochs, arch)
     run.log(train_stats)
 
     # Evaluation benchmark
