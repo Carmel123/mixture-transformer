@@ -222,8 +222,8 @@ class MixtureTransformerBlock(nn.Module):
         # weights from router
         weights = self.router(x)
         usage = weights.mean(dim=(0, 1))
-        uniform = torch.full_like(usage, 1.0 / self.config.n_expert)
-        aux_loss = torch.sum(usage * torch.log(usage / uniform))
+        print(usage.detach().cpu())
+        aux_loss =  -torch.sum(usage * torch.log(usage + 1e-9))
         
         # expert outputs
         exp_out = torch.stack(
@@ -232,7 +232,8 @@ class MixtureTransformerBlock(nn.Module):
         # adjust size to match expert outputs
         # weights = weights.unsqueeze(1).expand_as(exp_out)
         weights = weights.unsqueeze(-1)
-        out = torch.sum(exp_out * weights, dim=2)
+        h = x + torch.sum(exp_out * weights, dim=2)
+        out = h + self.feed_forward(self.ffn_norm(h))
 
         return out, aux_loss
 
@@ -274,7 +275,7 @@ class Router(nn.Module):
         x = self.leaky_relu2(x)
         x = self.dropout3(x)
 
-        return torch.softmax(self.layer4(x), dim=1)
+        return torch.softmax(self.layer4(x), dim=-1)
    
 
 class Attention(nn.Module):

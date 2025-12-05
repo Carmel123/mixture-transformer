@@ -114,9 +114,13 @@ class WikiTextDataset(Dataset):
 
     def __getitem__(self, idx):
         x = self.examples[idx]
+
+        input_ids = x[:-1]
+        labels = x[1:].clone()
+
         return {
-            "input_ids": x,
-            "labels": x.clone()  # causal LM setup
+            "input_ids": input_ids,
+            "labels": labels,
         }
 # -----------------------------
 # Training
@@ -286,6 +290,7 @@ def main(arch, data, n_epochs):
     architecture = "Mix-Transformer"
     if arch:
         architecture = "Transformer"
+    
 
     run = wandb.init(
     entity="anemia-pred",
@@ -293,7 +298,7 @@ def main(arch, data, n_epochs):
     config={
         "learning_rate": LR,
         "architecture": architecture,
-        "dataset": "Random",
+        "dataset": data,
         "train_steps": TRAIN_STEPS,
     },)
 
