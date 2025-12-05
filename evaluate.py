@@ -91,22 +91,33 @@ def build_tokenizer(dataset, vocab_size):
 # -------------------------------------------------
 
 class WikiTextDataset(Dataset):
-    def __init__(self, texts, tokenizer, block_size):
-        self.tokens = []
+    def __init__(self, dataset, split: str = "train", tokenizer=None, block_size: int = 128):
+        assert tokenizer is not None
 
-        for t in texts:
-            ids = tokenizer.encode(t).ids
-            if len(ids) >= block_size + 1:
-                for i in range(0, len(ids) - block_size, block_size):
-                    self.tokens.append(ids[i : i + block_size + 1])
+        self.block_size = block_size
+        self.tokenizer = tokenizer
+
+
+        # Concatenate all text and tokenize
+        text = "\n\n".join(dataset["text"])
+        enc = tokenizer.encode(text)
+        token_ids = enc.ids
+
+        # Split into blocks
+        self.examples = []
+        for i in range(0, len(token_ids) - block_size, block_size):
+            block = token_ids[i : i + block_size]
+            self.examples.append(torch.tensor(block, dtype=torch.long))
 
     def __len__(self):
-        return len(self.tokens)
+        return len(self.examples)
 
     def __getitem__(self, idx):
-        seq = torch.tensor(self.tokens[idx])
-        return seq[:-1], seq[1:]
-
+        x = self.examples[idx]
+        return {
+            "input_ids": x,
+            "labels": x.clone()  # causal LM setup
+        }
 # -----------------------------
 # Training
 # -----------------------------
@@ -333,14 +344,18 @@ def main(arch, data, n_epochs):
         dataset = load_dataset('wikitext', "wikitext-2-raw-v1")
 
         tokenizer = build_tokenizer(
-            dataset["train"], vocab_size=VOCAB_SIZE
+            dataset['train'], vocab_size=VOCAB_SIZE
+        )
+        train_ds = WikiTextDataset(
+            dataset['train'],
+            tokenizer=tokenizer,
+            block_size=BLOCK_SIZE
         )
 
-        train_ds = WikiTextDataset(
-            dataset["train"]["text"], tokenizer, BLOCK_SIZE
-        )
         eval_ds = WikiTextDataset(
-            dataset["validation"]["text"], tokenizer, BLOCK_SIZE
+            dataset['validation'],
+            tokenizer=tokenizer,
+            block_size=BLOCK_SIZE
         )
 
     train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
