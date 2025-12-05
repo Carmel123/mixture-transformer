@@ -185,7 +185,7 @@ def train(model, dataloader, optimizer, n_epochs, arch):
 
     out = {
         # "train_loss": total_loss / TRAIN_STEPS,
-        'avl_loss': total_loss / global_step,
+        'avg_loss': total_loss / global_step,
         'avg_nll': total_loss / total_tokens,
         "train_time_sec": elapsed,
         "tokens_per_sec": tokens_per_sec,
@@ -411,7 +411,8 @@ def main(arch, data, n_epochs):
     # Results
     wandb.log(
         {
-            "summary/train_loss": train_stats["train_loss"],
+            "summary/train_avg_loss": train_stats["avg_loss"],
+            'summary/train_avg_nll': train_stats['avg_nll'],
             "summary/tokens_per_sec": train_stats["tokens_per_sec"],
             "summary/eval_nll": eval_stats["eval_nll"],
             "summary/perplexity": eval_stats["perplexity"],
