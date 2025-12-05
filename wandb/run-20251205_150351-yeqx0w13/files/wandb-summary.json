@@ -1,0 +1,1 @@
+{"avg_nll":5.08693828042556e-05,"train_time_sec":46.49512959597632,"train/loss":0.01324462890625,"train/epoch":4,"_wandb":{"runtime":88},"tokens_per_sec":202178.59551494833,"_runtime":88,"avl_loss":0.41581606657608694,"_step":1150,"train/tokens_seen":9400320,"_timestamp":1.7649651205982301e+09}

@@ -1,0 +1,1 @@
+{"_runtime":5,"train_time_sec":3.5264832470566034,"tokens_per_sec":232299.41633318385,"_step":6,"eval_time_sec":0.291653860360384,"_timestamp":1.764638974081262e+09,"eval_nll":10.4375,"perplexity":34115.257594825,"_wandb":{"runtime":5},"train_loss":10.4653125,"loss":10.5625}

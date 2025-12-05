@@ -1,0 +1,122 @@
+_wandb:
+    value:
+        cli_version: 0.23.0
+        e:
+            jbgago7b5vn753slqevkif2b76xtt31c:
+                codePath: evaluate.py
+                codePathLocal: evaluate.py
+                cpu_count: 80
+                cpu_count_logical: 160
+                cudaVersion: "12.2"
+                disk:
+                    /:
+                        total: "83845120000"
+                        used: "21354328064"
+                email: clp9358@nyu.edu
+                executable: /scratch/clp9358/mixer-mixture/penv/bin/python3
+                git:
+                    commit: 32a1df458372aeaa4b8471397bd11f87a13c37d3
+                    remote: https://github.com/Carmel123/mixture-transformer.git
+                gpu: NVIDIA A100-SXM4-80GB
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ampere
+                      cudaCores: 6912
+                      memoryTotal: "85899345920"
+                      name: NVIDIA A100-SXM4-80GB
+                      uuid: GPU-35525fc1-b256-5288-7f1a-1378bdea8b3f
+                host: ga042.hpc.nyu.edu
+                memory:
+                    total: "1081271300096"
+                os: Linux-5.14.0-284.86.1.el9_2.x86_64-x86_64-with-glibc2.34
+                program: /scratch/clp9358/mixer-mixture/mixture-transformer/evaluate.py
+                python: CPython 3.13.9
+                root: /scratch/clp9358/mixer-mixture/mixture-transformer
+                slurm:
+                    cluster_name: greene
+                    conf: /opt/slurm/etc/slurm.conf
+                    cpu_bind: quiet,mask_cpu:0x0000000000000080000000000000000000800000
+                    cpu_bind_list: 0x0000000000000080000000000000000000800000
+                    cpu_bind_type: 'mask_cpu:'
+                    cpu_bind_verbose: quiet
+                    cpus_on_node: "2"
+                    distribution: cyclic
+                    gpus_on_node: "1"
+                    gtids: "0"
+                    job_account: users
+                    job_cpus_per_node: "2"
+                    job_end_time: "1764647863"
+                    job_gid: "4231524"
+                    job_gpus: "0"
+                    job_group: clp9358
+                    job_id: "2886030"
+                    job_name: bash
+                    job_nodelist: ga042
+                    job_num_nodes: "1"
+                    job_partition: cds_a100_2,cds_rtx_d,stake_a100_2,stake_a100_1,stake_h100_1,cds_rtx_a,rtx8000,v100,a100_2,a100_1,h100_1,gpu_misc_v100
+                    job_qos: interact
+                    job_start_time: "1764644263"
+                    job_uid: "4231524"
+                    job_user: clp9358
+                    jobid: "2886030"
+                    jobtmp: /state/partition1/job-2886030
+                    launch_node_ipaddr: 10.32.32.5
+                    localid: "0"
+                    mem_per_node: "40960"
+                    nnodes: "1"
+                    nodeid: "0"
+                    nodelist: ga042
+                    nprocs: "1"
+                    ntasks: "1"
+                    prio_process: "0"
+                    procid: "0"
+                    pty_port: "48180"
+                    pty_win_col: "113"
+                    pty_win_row: "28"
+                    script_context: prolog_task
+                    srun_comm_host: 10.32.32.5
+                    srun_comm_port: "48181"
+                    step_gpus: "0"
+                    step_id: "0"
+                    step_launcher_port: "48181"
+                    step_nodelist: ga042
+                    step_num_nodes: "1"
+                    step_num_tasks: "1"
+                    step_tasks_per_node: "1"
+                    stepid: "0"
+                    submit_dir: /scratch/clp9358/mixer-mixture
+                    submit_host: log-2.hpc.nyu.edu
+                    task_pid: "1863861"
+                    tasks_per_node: "1"
+                    tmpdir: /state/partition1/job-2886030
+                    topology_addr: ga042
+                    topology_addr_pattern: node
+                    umask: "0022"
+                startedAt: "2025-12-02T03:01:13.509355Z"
+                writerId: jbgago7b5vn753slqevkif2b76xtt31c
+        m: []
+        python_version: 3.13.9
+        t:
+            "1":
+                - 1
+                - 11
+                - 49
+            "2":
+                - 1
+                - 11
+                - 49
+            "3":
+                - 16
+            "4": 3.13.9
+            "5": 0.23.0
+            "6": 4.57.3
+            "12": 0.23.0
+            "13": linux-x86_64
+architecture:
+    value: Mix-Transformer
+dataset:
+    value: Random
+learning_rate:
+    value: 0.0003
+train_steps:
+    value: 200

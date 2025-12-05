@@ -222,7 +222,7 @@ class MixtureTransformerBlock(nn.Module):
         # weights from router
         weights = self.router(x)
         usage = weights.mean(dim=(0, 1))
-        print(usage.detach().cpu())
+        #  print(usage.detach().cpu())
         aux_loss =  -torch.sum(usage * torch.log(usage + 1e-9))
         
         # expert outputs
