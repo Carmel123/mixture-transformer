@@ -400,7 +400,7 @@ def main(arch, data, n_epochs):
 
     # Evaluation benchmark
     print("\nStarting evaluation...")
-    eval_stats = evaluate(model, eval_loader)
+    eval_stats = evaluate(model, eval_loader, arch)
     run.log(eval_stats)
 
     # Generation benchmark
