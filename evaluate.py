@@ -330,7 +330,7 @@ def main(arch, data, n_epochs):
     
     # Wiki Data
     if data == 'wiki':
-        dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
+        dataset = load_dataset('wikitext', "wikitext-2-raw-v1")
 
         tokenizer = build_tokenizer(
             dataset["train"], vocab_size=VOCAB_SIZE
@@ -343,8 +343,8 @@ def main(arch, data, n_epochs):
             dataset["validation"]["text"], tokenizer, BLOCK_SIZE
         )
 
-        train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
-        eval_loader = DataLoader(eval_ds, batch_size=BATCH_SIZE)
+    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
+    eval_loader = DataLoader(eval_ds, batch_size=BATCH_SIZE)
 
 
     # Warmup
