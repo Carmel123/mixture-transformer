@@ -29,7 +29,7 @@ BLOCK_SIZE = 1024
 BATCH_SIZE = 8
 
 # TRAIN_STEPS = 250
-TRAIN_STEPS = 250*5
+TRAIN_STEPS = 12000
 WARMUP_STEPS = 100
 EVAL_STEPS = 50
 LOG_EVERY = 20
@@ -361,7 +361,7 @@ def main(arch, data, n_epochs):
     
     # Wiki Data
     if data == 'wiki':
-        dataset = load_dataset('wikitext', "wikitext-102-raw-v1")
+        dataset = load_dataset('wikitext', "wikitext-103-raw-v1")
 
         tokenizer = build_tokenizer(
             dataset['train'], vocab_size=VOCAB_SIZE
