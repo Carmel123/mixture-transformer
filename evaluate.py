@@ -361,17 +361,17 @@ def main(arch, data, n_epochs):
     train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
     eval_loader = DataLoader(eval_ds, batch_size=BATCH_SIZE)
 
-
     # Warmup
     print("Warming up...")
-    x, y = next(iter(train_loader))
-    x, y = x.to(DEVICE), y.to(DEVICE)
-    with torch.no_grad():
-        for _ in range(WARMUP_STEPS):
-            loss, loss_dict = model(x, labels=y)
-            loss.backward()
-            optimizer.zero_grad(set_to_none=True)
-            run.log({"loss": loss})
+    batch = next(iter(train_loader))
+
+    x = batch["input_ids"].to(DEVICE)
+    y = batch["labels"].to(DEVICE)
+
+    for _ in range(WARMUP_STEPS):
+        loss, _ = model(x, labels=y)
+        loss.backward()
+        optimizer.zero_grad(set_to_none=True)
 
     torch.cuda.synchronize() if DEVICE == "cuda" else None
 
