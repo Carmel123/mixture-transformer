@@ -130,9 +130,10 @@ class MixTransformer(nn.Module):
     def setup_kv_cache(self, max_batch_size: int, dtype, device: torch.device):
         print("Setting up kv cache ...")
         for block in self.layers:
-            block.attention.kv_cache = KVCache(
-                max_batch_size, self.config.block_size, self.config.n_local_heads, self.config.head_dim, dtype, device
-            )
+            for expert in block.experts:
+                expert.kv_cache = KVCache(
+                    max_batch_size, self.config.block_size, self.config.n_local_heads, self.config.head_dim, dtype, device
+                )
 
     def forward(
         self,
