@@ -3,6 +3,10 @@ import time
 import math
 import torch
 import wandb
+import argparse
+
+from datasets import load_dataset
+from tokenizers import Tokenizer, models, trainers, pre_tokenizers
 
 from torch.utils.data import Dataset, DataLoader
 
@@ -17,18 +21,27 @@ from mix_transformer import MixTransformer, MixTransformerConfig
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DTYPE = torch.bfloat16 if DEVICE == "cuda" else torch.float32
 
+PROJECT = "mixture-transformer"
+
 VOCAB_SIZE = 32000
 BLOCK_SIZE = 1024
-BATCH_SIZE = 4
+# BATCH_SIZE = 4
+BATCH_SIZE = 8
 
-TRAIN_STEPS = 200
+# TRAIN_STEPS = 250
+TRAIN_STEPS = 250*5
+WARMUP_STEPS = 100
 EVAL_STEPS = 50
 LOG_EVERY = 20
 
 LR = 3e-4
 
-torch.manual_seed(0)
+GEN_TOKENS = 256
+GEN_WARMUP = 8
 
+LOG_EVERY = 25
+
+torch.manual_seed(0)
 
 # -----------------------------
 # Synthetic Dataset
@@ -53,50 +66,107 @@ class RandomTokenDataset(Dataset):
         )
         return tokens[:-1], tokens[1:]
 
+# -------------------------------------------------
+# Tokenizer
+# -------------------------------------------------
+
+def build_tokenizer(dataset, vocab_size):
+    tokenizer = Tokenizer(models.BPE(unk_token="<unk>"))
+    tokenizer.pre_tokenizers = pre_tokenizers.ByteLevel()
+
+    trainer = trainers.BpeTrainer(
+        vocab_size=vocab_size,
+        special_tokens=["<unk>", "<pad>"],
+    )
+
+    def gen_text():
+        for x in dataset:
+            yield x["text"]
+
+    tokenizer.train_from_iterator(gen_text(), trainer)
+    return tokenizer
+
+# -------------------------------------------------
+# WikiText Dataset
+# -------------------------------------------------
+
+class WikiTextDataset(Dataset):
+    def __init__(self, texts, tokenizer, block_size):
+        self.tokens = []
+
+        for t in texts:
+            ids = tokenizer.encode(t).ids
+            if len(ids) >= block_size + 1:
+                for i in range(0, len(ids) - block_size, block_size):
+                    self.tokens.append(ids[i : i + block_size + 1])
+
+    def __len__(self):
+        return len(self.tokens)
+
+    def __getitem__(self, idx):
+        seq = torch.tensor(self.tokens[idx])
+        return seq[:-1], seq[1:]
 
 # -----------------------------
 # Training
 # -----------------------------
 
-def train(model, dataloader, optimizer):
+def train(model, dataloader, optimizer, n_epochs):
     model.train()
     start_time = time.perf_counter()
 
     total_tokens = 0
     total_loss = 0.0
 
-    for step, (x, y) in enumerate(dataloader):
-        if step >= TRAIN_STEPS:
-            break
+    global_step = 0
 
-        x = x.to(DEVICE)
-        y = y.to(DEVICE)
+    for epoch in range(n_epochs):
+        for step, (x, y) in enumerate(dataloader):
+            if global_step >= TRAIN_STEPS:
+                break
 
-        optimizer.zero_grad(set_to_none=True)
+            global_step += 1
 
-        # For Transformer:
-        # loss = model(x, labels=y)
+            x = x.to(DEVICE)
+            y = y.to(DEVICE)
 
-        # For MixTransformer
-        loss, loss_dict = model(x, labels=y)
-        loss.backward()
-        optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
 
-        tokens = x.numel()
-        total_tokens += tokens
-        total_loss += loss.item()
+            # For Transformer:
+            # loss = model(x, labels=y)
 
-        if step % LOG_EVERY == 0:
-            print(
-                f"[train] step={step:4d} "
-                f"loss={loss.item():.4f}"
+            # For MixTransformer
+            loss, loss_dict = model(x, labels=y)
+            loss.backward()
+            optimizer.step()
+
+            tokens = x.numel()
+            total_tokens += tokens
+            total_loss += loss.item()
+
+            wandb.log(
+                {
+                    "train/loss": loss.item(),
+                    'train/aux_loss': loss_dict['aux_loss'],
+                    'train/lm_loss': loss_dict['lm_loss'],
+                    'train/epoch': epoch,
+                    'train/tokens_seen': total_tokens
+                }
             )
 
-    elapsed = time.perf_counter() - start_time
-    tokens_per_sec = total_tokens / elapsed
+            if step % LOG_EVERY == 0:
+                print(
+                    f"[train] step={step:4d} "
+                    f"loss={loss.item():.4f}"
+                )
+
+        elapsed = time.perf_counter() - start_time
+        tokens_per_sec = total_tokens / elapsed
 
     return {
-        "train_loss": total_loss / TRAIN_STEPS,
+        # "train_loss": total_loss / TRAIN_STEPS,
+        'avl_loss': total_loss / global_step,
+        'avg_nll': total_loss / total_tokens,
         "train_time_sec": elapsed,
         "tokens_per_sec": tokens_per_sec,
         'train_lm_loss': loss_dict['lm_loss'].item(),
@@ -138,36 +208,92 @@ def evaluate(model, dataloader):
         "eval_time_sec": elapsed,
     }
 
+# -------------------------------------------------
+# Generation Throughput
+# -------------------------------------------------
+
+@torch.no_grad()
+def benchmark_generation(model, tokenizer):
+    model.eval()
+
+    input_ids = torch.randint(
+        0, tokenizer.get_vocab_size(), (1, GEN_WARMUP), device=DEVICE
+    )
+
+    model.setup_kv_cache(
+        max_batch_size=1,
+        dtype=DTYPE,
+        device=torch.device(DEVICE),
+    )
+
+    input_pos = torch.arange(GEN_WARMUP, device=DEVICE)
+    _ = model(input_ids, input_pos=input_pos)
+
+    torch.cuda.synchronize() if DEVICE == "cuda" else None
+
+    start = time.perf_counter()
+
+    cur_token = input_ids[:, -1:]
+    for i in range(GEN_TOKENS):
+        pos = torch.tensor([GEN_WARMUP + i], device=DEVICE)
+        logits = model(cur_token, input_pos=pos)
+        cur_token = torch.argmax(logits[:, -1:], dim=-1)
+
+    torch.cuda.synchronize() if DEVICE == "cuda" else None
+    elapsed = time.perf_counter() - start
+
+    tps = GEN_TOKENS / elapsed
+    ms_per_token = 1000 * elapsed / GEN_TOKENS
+
+    return {
+        "gen_tokens_per_sec": tps,
+        "gen_ms_per_token": ms_per_token,
+    }
+
 
 # -----------------------------
 # Main
 # -----------------------------
 
-def main():
+def main(arch, data, n_epochs):
+
+    architecture = "Mix-Transformer"
+    if arch:
+        architecture = "Transformer"
 
     run = wandb.init(
     entity="anemia-pred",
-    project="mixture-transformer",
+    project=PROJECT,
     config={
         "learning_rate": LR,
-        "architecture": "Mix-Transformer",
+        "architecture": architecture,
         "dataset": "Random",
         "train_steps": TRAIN_STEPS,
     },)
 
     # Model config
-    config = MixTransformerConfig(
+    if arch: 
+        config = TransformerConfig(
         block_size=BLOCK_SIZE,
         vocab_size=VOCAB_SIZE,
         n_layer=6,
         n_head=8,
-        # dim=512, for transformer
-        dim = 256, # for mix transformer
+        dim=768,
         use_fused_ops=False,
-        n_expert=2 # for mix transformer
-    )
-
-    model = MixTransformer(config).to(DEVICE)
+        )
+        model = Transformer(config).to(DEVICE)
+    else:
+        config = MixTransformerConfig(
+            block_size=BLOCK_SIZE,
+            vocab_size=VOCAB_SIZE,
+            n_layer=6,
+            n_head=8,
+            dim = 384, # for mix transformer
+            use_fused_ops=False,
+            n_expert=2 # for mix transformer
+        )
+        model = MixTransformer(config).to(DEVICE)
+    
     model.setup_cache(device=DEVICE)
 
     if DEVICE == "cuda":
@@ -175,47 +301,68 @@ def main():
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=LR)
 
-    # Data
-    train_ds = RandomTokenDataset(
-        num_samples=10_000,
-        block_size=BLOCK_SIZE,
-        vocab_size=VOCAB_SIZE,
-    )
-    eval_ds = RandomTokenDataset(
-        num_samples=2_000,
-        block_size=BLOCK_SIZE,
-        vocab_size=VOCAB_SIZE,
-    )
+    # Random Data
+    if data == 'rand':
+        train_ds = RandomTokenDataset(
+            num_samples=10_000,
+            block_size=BLOCK_SIZE,
+            vocab_size=VOCAB_SIZE,
+        )
+        eval_ds = RandomTokenDataset(
+            num_samples=2_000,
+            block_size=BLOCK_SIZE,
+            vocab_size=VOCAB_SIZE,
+        )
 
-    train_loader = DataLoader(
-        train_ds,
-        batch_size=BATCH_SIZE,
-        shuffle=True,
-        pin_memory=True,
-    )
+        train_loader = DataLoader(
+            train_ds,
+            batch_size=BATCH_SIZE,
+            shuffle=True,
+            pin_memory=True,
+        )
 
-    eval_loader = DataLoader(
-        eval_ds,
-        batch_size=BATCH_SIZE,
-        shuffle=False,
-        pin_memory=True,
-    )
+        eval_loader = DataLoader(
+            eval_ds,
+            batch_size=BATCH_SIZE,
+            shuffle=False,
+            pin_memory=True,
+        )
+    
+    # Wiki Data
+    if data == 'wiki':
+        dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
+
+        tokenizer = build_tokenizer(
+            dataset["train"], vocab_size=VOCAB_SIZE
+        )
+
+        train_ds = WikiTextDataset(
+            dataset["train"]["text"], tokenizer, BLOCK_SIZE
+        )
+        eval_ds = WikiTextDataset(
+            dataset["validation"]["text"], tokenizer, BLOCK_SIZE
+        )
+
+        train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
+        eval_loader = DataLoader(eval_ds, batch_size=BATCH_SIZE)
+
 
     # Warmup
     print("Warming up...")
     x, y = next(iter(train_loader))
     x, y = x.to(DEVICE), y.to(DEVICE)
-    for _ in range(5):
-        loss, loss_dict = model(x, labels=y)
-        loss.backward()
-        optimizer.zero_grad(set_to_none=True)
-        run.log({"loss": loss})
+    with torch.no_grad():
+        for _ in range(WARMUP_STEPS):
+            loss, loss_dict = model(x, labels=y)
+            loss.backward()
+            optimizer.zero_grad(set_to_none=True)
+            run.log({"loss": loss})
 
     torch.cuda.synchronize() if DEVICE == "cuda" else None
 
     # Training benchmark
     print("\nStarting training benchmark...")
-    train_stats = train(model, train_loader, optimizer)
+    train_stats = train(model, train_loader, optimizer, n_epochs)
     run.log(train_stats)
 
     # Evaluation benchmark
@@ -223,17 +370,55 @@ def main():
     eval_stats = evaluate(model, eval_loader)
     run.log(eval_stats)
 
+    # Generation benchmark
+    print('\nStarting generation...')
+    gen_stats = benchmark_generation(model, tokenizer)
+
+
     # Results
-    print("\n================ RESULTS ================")
-    print(f"Train loss           : {train_stats['train_loss']:.4f}")
-    print(f"Train time (s)       : {train_stats['train_time_sec']:.2f}")
-    print(f"Tokens / sec         : {train_stats['tokens_per_sec']:.2f}")
-    print("-----------------------------------------")
-    print(f"Eval NLL             : {eval_stats['eval_nll']:.4f}")
-    print(f"Perplexity           : {eval_stats['perplexity']:.2f}")
-    print(f"Eval time (s)        : {eval_stats['eval_time_sec']:.2f}")
-    print("=========================================")
+    wandb.log(
+        {
+            "summary/train_loss": train_stats["train_loss"],
+            "summary/tokens_per_sec": train_stats["tokens_per_sec"],
+            "summary/eval_nll": eval_stats["eval_nll"],
+            "summary/perplexity": eval_stats["perplexity"],
+            "summary/gen_tokens_per_sec": gen_stats["gen_tokens_per_sec"],
+            "summary/gen_ms_per_token": gen_stats["gen_ms_per_token"],
+        }
+    )
+
+    print("\n============== FINAL RESULTS ==============")
+    print(f"Train loss        : {train_stats['train_loss']:.4f}")
+    print(f"Tokens / sec      : {train_stats['tokens_per_sec']:.0f}")
+    print(f"Eval PPL          : {eval_stats['perplexity']:.2f}")
+    print(f"Gen tokens / sec  : {gen_stats['gen_tokens_per_sec']:.2f}")
+    print(f"Gen ms / token    : {gen_stats['gen_ms_per_token']:.2f}")
+    print("==========================================")
+
+    wandb.finish()
+
+    # print("\n================ RESULTS ================")
+    # print(f"Train loss           : {train_stats['train_loss']:.4f}")
+    # print(f"Train time (s)       : {train_stats['train_time_sec']:.2f}")
+    # print(f"Tokens / sec         : {train_stats['tokens_per_sec']:.2f}")
+    # print("-----------------------------------------")
+    # print(f"Eval NLL             : {eval_stats['eval_nll']:.4f}")
+    # print(f"Perplexity           : {eval_stats['perplexity']:.2f}")
+    # print(f"Eval time (s)        : {eval_stats['eval_time_sec']:.2f}")
+    # print("=========================================")
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Dataset creation")
+
+    parser.add_argument("--arch", default=0 , type=int, 
+                        help="0 - mix transformer, 1 - transformer")
+
+    parser.add_argument("--data", default='wiki', type=str,
+                        help='wiki or rand')
+    
+    parser.add_argument('--epochs', default=5, type=int)
+    
+    args = parser.parse_args()
+
+    main(args.arch, args.data, args.epochs)
