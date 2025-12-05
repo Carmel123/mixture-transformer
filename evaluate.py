@@ -422,7 +422,7 @@ def main(arch, data, n_epochs):
     )
 
     print("\n============== FINAL RESULTS ==============")
-    print(f"Train loss        : {train_stats['train_loss']:.4f}")
+    print(f"Train loss        : {train_stats['avg_loss']:.4f}")
     print(f"Tokens / sec      : {train_stats['tokens_per_sec']:.0f}")
     print(f"Eval PPL          : {eval_stats['perplexity']:.2f}")
     print(f"Gen tokens / sec  : {gen_stats['gen_tokens_per_sec']:.2f}")
