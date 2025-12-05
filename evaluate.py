@@ -175,6 +175,7 @@ def train(model, dataloader, optimizer, n_epochs, arch):
 
             if step % LOG_EVERY == 0:
                 print(
+                    f'epoch = {epoch} '
                     f"[train] step={step:4d} "
                     f"loss={loss.item():.4f}"
                 )
