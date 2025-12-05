@@ -132,14 +132,14 @@ def train(model, dataloader, optimizer, n_epochs, arch):
     global_step = 0
 
     for epoch in range(n_epochs):
-        for step, (x, y) in enumerate(dataloader):
+        for step, batch in enumerate(dataloader):
             if global_step >= TRAIN_STEPS:
                 break
 
             global_step += 1
 
-            x = x.to(DEVICE)
-            y = y.to(DEVICE)
+            x = batch['input_ids'].to(DEVICE)
+            y = batch['labels'].to(DEVICE)
 
             optimizer.zero_grad(set_to_none=True)
 
@@ -208,12 +208,12 @@ def evaluate(model, dataloader, arch):
     total_loss = 0.0
     total_tokens = 0
 
-    for step, (x, y) in enumerate(dataloader):
+    for step, batch in enumerate(dataloader):
         if step >= EVAL_STEPS:
             break
 
-        x = x.to(DEVICE)
-        y = y.to(DEVICE)
+        x = batch['input_ids'].to(DEVICE)
+        y = batch['labels'].to(DEVICE)
 
         if arch:
             loss = model(x, labels=y)
