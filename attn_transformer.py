@@ -55,7 +55,6 @@ class MixTransformerConfig:
     padded_vocab_size: Optional[int] = None
 
     n_layer: int = 6
-    n_expert: int = 2
     n_head: int = 12
     dim: int = 768
     intermediate_size: Optional[int] = None
@@ -66,9 +65,6 @@ class MixTransformerConfig:
     norm_eps: float = 1e-5
     rope_n_elem: Optional[int] = None
 
-    # for gating
-    dropout_rate: float = 0.1
-    aux_weight: float = 0.01
 
     # optional
     use_fused_ops: bool = False
@@ -192,17 +188,6 @@ class MixtureTransformerBlock(nn.Module):
         self.router = Router(config, layer_idx)
         # make more modular by replacing Attention
         self.experts = nn.ModuleList(Attention(config, layer_idx=i) for i in range(config.n_expert))
-        
-        # Freezing the experts to ensure that they are not
-        # learning when MoE is training.
-        # Ideally, one can free them before sending the
-        # experts to the MoE; in that case the following three
-        # lines can be commented out.
-        # for expert in self.experts:
-        #     for param in expert.parameters():
-        #         param.requires_grad = False
-
-        # TODO: Is this ^^ reasonable for this case??
 
         if config.use_fused_ops:
             self.feed_forward = LigerSwiGLUMLP(config)

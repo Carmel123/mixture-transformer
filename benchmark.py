@@ -27,7 +27,7 @@ torch._functorch.config.enable_autograd_cache = True
 #     Transformer
 # )
 
-from mix_transformer import (
+from attn_transformer import (
     MixTransformerConfig,
     MixTransformer
 )

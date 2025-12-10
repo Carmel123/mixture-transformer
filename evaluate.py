@@ -12,7 +12,9 @@ from torch.utils.data import Dataset, DataLoader
 
 from transformer import Transformer, TransformerConfig
 
-from mix_transformer import MixTransformer, MixTransformerConfig
+from attn_transformer import MixTransformer, MixTransformerConfig
+
+from ffn_transformer import FFNTransformer, FFNTransformerConfig
 
 # -----------------------------
 # Configuration
@@ -32,14 +34,12 @@ BATCH_SIZE = 8
 TRAIN_STEPS = 12000
 WARMUP_STEPS = 100
 EVAL_STEPS = 50
-LOG_EVERY = 20
+LOG_EVERY = 100
 
 LR = 3e-4
 
 GEN_TOKENS = 256
 GEN_WARMUP = 8
-
-LOG_EVERY = 25
 
 torch.manual_seed(0)
 
@@ -147,7 +147,7 @@ def train(model, dataloader, optimizer, n_epochs, arch):
 
             optimizer.zero_grad(set_to_none=True)
 
-            if arch:
+            if arch == 1:
                 loss = model(x, labels=y)
             else:
                 loss, loss_dict = model(x, labels=y)
@@ -189,8 +189,8 @@ def train(model, dataloader, optimizer, n_epochs, arch):
 
     out = {
         # "train_loss": total_loss / TRAIN_STEPS,
-        'avg_loss': total_loss / global_step,
-        'avg_nll': total_loss / total_tokens,
+        'train_avg_loss': total_loss / global_step,
+        'train_avg_nll': total_loss / total_tokens,
         "train_time_sec": elapsed,
         "tokens_per_sec": tokens_per_sec,
     }
@@ -220,7 +220,7 @@ def evaluate(model, dataloader, arch):
         x = batch['input_ids'].to(DEVICE)
         y = batch['labels'].to(DEVICE)
 
-        if arch:
+        if arch == 1:
             loss = model(x, labels=y)
         else:
             loss, _ = model(x, labels=y)
@@ -233,7 +233,7 @@ def evaluate(model, dataloader, arch):
     perplexity = math.exp(avg_nll)
 
     return {
-        "eval_nll": avg_nll,
+        "eval_avg_nll": avg_nll,
         "perplexity": perplexity,
         "eval_time_sec": elapsed,
     }
@@ -260,12 +260,17 @@ def benchmark_generation(model, tokenizer):
     _ = model(input_ids, input_pos=input_pos)
 
     torch.cuda.synchronize() if DEVICE == "cuda" else None
+    decode_positions = torch.arange(
+        GEN_WARMUP,
+        GEN_WARMUP + GEN_TOKENS,
+        device=DEVICE
+    )
 
     start = time.perf_counter()
 
-    cur_token = input_ids[:, -1:]
+    cur_token = logits[:, -1].argmax(dim=-1, keepdim=True)
     for i in range(GEN_TOKENS):
-        pos = torch.tensor([GEN_WARMUP + i], device=DEVICE)
+        pos = decode_positions[i].view(1, 1)
         logits = model(cur_token, input_pos=pos)
         cur_token = torch.argmax(logits[:, -1:], dim=-1)
 
@@ -288,8 +293,10 @@ def benchmark_generation(model, tokenizer):
 def main(arch, data, n_epochs):
 
     architecture = "Mix-Transformer"
-    if arch:
+    if arch == 1:
         architecture = "Transformer"
+    if arch == 2:
+        architecture = "FFN-Transformer"
     
 
     run = wandb.init(
@@ -303,7 +310,7 @@ def main(arch, data, n_epochs):
     },)
 
     # Model config
-    if arch: 
+    if arch == 1: 
         config = TransformerConfig(
         block_size=BLOCK_SIZE,
         vocab_size=VOCAB_SIZE,
@@ -313,13 +320,26 @@ def main(arch, data, n_epochs):
         use_fused_ops=False,
         )
         model = Transformer(config).to(DEVICE)
-    else:
+
+    elif arch == 0:
         config = MixTransformerConfig(
             block_size=BLOCK_SIZE,
             vocab_size=VOCAB_SIZE,
             n_layer=6,
             n_head=8,
             dim = 384, # for mix transformer
+            use_fused_ops=False,
+            n_expert=2 # for mix transformer
+        )
+        model = MixTransformer(config).to(DEVICE)
+    
+    else:
+        config = FFNTransformerConfig(
+            block_size=BLOCK_SIZE,
+            vocab_size=VOCAB_SIZE,
+            n_layer=6,
+            n_head=8,
+            dim = 768,
             use_fused_ops=False,
             n_expert=2 # for mix transformer
         )
@@ -389,7 +409,7 @@ def main(arch, data, n_epochs):
     y = batch["labels"].to(DEVICE)
 
     for _ in range(WARMUP_STEPS):
-        if arch:
+        if arch == 1:
             loss = model(x, labels=y)
         else:
             loss, _ = model(x, labels=y)
@@ -420,7 +440,7 @@ def main(arch, data, n_epochs):
             'summary/train_avg_nll': train_stats['avg_nll'],
             "summary/tokens_per_sec": train_stats["tokens_per_sec"],
             "summary/eval_nll": eval_stats["eval_nll"],
-            "summary/perplexity": eval_stats["perplexity"],
+            "summary/eval_perplexity": eval_stats["perplexity"],
             "summary/gen_tokens_per_sec": gen_stats["gen_tokens_per_sec"],
             "summary/gen_ms_per_token": gen_stats["gen_ms_per_token"],
         }
@@ -451,7 +471,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Dataset creation")
 
     parser.add_argument("--arch", default=0 , type=int, 
-                        help="0 - mix transformer, 1 - transformer")
+                        help="0 - attn transformer, 1 - transformer, 2 - ffn transformer")
 
     parser.add_argument("--data", default='wiki', type=str,
                         help='wiki or rand')
