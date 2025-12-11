@@ -64,7 +64,11 @@ class MixTransformerConfig:
     rope_base: float = 10000
     norm_eps: float = 1e-5
     rope_n_elem: Optional[int] = None
-
+    
+    # for gating
+    n_expert: int = 2
+    dropout_rate: float = 0.1
+    aux_weight: float = 0.01
 
     # optional
     use_fused_ops: bool = False
