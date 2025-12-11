@@ -272,7 +272,7 @@ def benchmark_generation(model, tokenizer):
 
     cur_token = logits[:, -1].argmax(dim=-1, keepdim=True)
     for i in range(GEN_TOKENS):
-        pos = decode_positions[i].view(1, 1)
+        pos = decode_positions[i].unsqueeze(0)
         logits = model(cur_token, input_pos=pos)
         cur_token = torch.argmax(logits[:, -1:], dim=-1)
 
