@@ -558,7 +558,7 @@ if __name__ == "__main__":
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    config = TransformerConfig(
+    config = FFNTransformerConfig(
         block_size=2048,
         n_layer=12,
 
@@ -566,7 +566,7 @@ if __name__ == "__main__":
         dim=768,
         # use_fused_ops=True,
     )
-    model = Transformer(config)
+    model = FFNTransformer(config)
     model.to(device)
     model.setup_cache(device=device) # setup RoPE cache
 

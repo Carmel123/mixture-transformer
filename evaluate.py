@@ -28,10 +28,10 @@ PROJECT = "mixture-transformer"
 VOCAB_SIZE = 32000
 BLOCK_SIZE = 1024
 # BATCH_SIZE = 4
-BATCH_SIZE = 8
+BATCH_SIZE = 32
 
 # TRAIN_STEPS = 250
-TRAIN_STEPS = 12000
+TRAIN_STEPS = 300000
 WARMUP_STEPS = 100
 EVAL_STEPS = 50
 LOG_EVERY = 100
@@ -259,7 +259,7 @@ def benchmark_generation(model, tokenizer):
     )
 
     input_pos = torch.arange(GEN_WARMUP, device=DEVICE)
-    _ = model(input_ids, input_pos=input_pos)
+    logits = model(input_ids, input_pos=input_pos)
 
     torch.cuda.synchronize() if DEVICE == "cuda" else None
     decode_positions = torch.arange(
@@ -433,7 +433,6 @@ def main(arch, data, n_epochs):
     # Generation benchmark
     print('\nStarting generation...')
     gen_stats = benchmark_generation(model, tokenizer)
-
 
     # Results
     wandb.log(
