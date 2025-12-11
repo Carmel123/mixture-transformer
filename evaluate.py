@@ -41,6 +41,8 @@ LR = 3e-4
 GEN_TOKENS = 256
 GEN_WARMUP = 8
 
+PATH = '/scratch/clp9358/mixer-mixture/'
+
 torch.manual_seed(0)
 
 # -----------------------------
@@ -447,13 +449,17 @@ def main(arch, data, n_epochs):
     )
 
     print("\n============== FINAL RESULTS ==============")
-    print(f"Train loss        : {train_stats['avg_loss']:.4f}")
+    print(f"Train loss        : {train_stats['avg_floss']:.4f}")
     print(f"Tokens / sec      : {train_stats['tokens_per_sec']:.0f}")
     print(f"Eval PPL          : {eval_stats['perplexity']:.2f}")
     print(f"Gen tokens / sec  : {gen_stats['gen_tokens_per_sec']:.2f}")
     print(f"Gen ms / token    : {gen_stats['gen_ms_per_token']:.2f}")
     print("==========================================")
 
+    # Save model
+    torch.save(model.state_dict(), f'{PATH}-{arch[:3]}-{data}-mod.pt')
+    wandb.save(f'{PATH}-{arch[:3]}-{data}-mod.pt')
+    
     wandb.finish()
 
     # print("\n================ RESULTS ================")
