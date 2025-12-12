@@ -425,11 +425,24 @@ def main(arch, data, n_epochs):
     train_stats = train(model, train_loader, optimizer, n_epochs, arch)
     run.log(train_stats)
 
+    # Save model
+    torch.save(model.state_dict(), f'{PATH}-{arch[:3]}-{data}-mod.pt')
+    wandb.save(f'{PATH}-{arch[:3]}-{data}-mod.pt')
+    
+    wandb.finish()
+
     # Evaluation benchmark
     print("\nStarting evaluation...")
     eval_stats = evaluate(model, eval_loader, arch)
     run.log(eval_stats)
 
+    wandb.log(
+        {"summary/train_avg_loss": train_stats["avg_loss"],
+            'summary/train_avg_nll': train_stats['avg_nll'],
+            "summary/tokens_per_sec": train_stats["tokens_per_sec"],
+            "summary/eval_nll": eval_stats["eval_nll"],
+            "summary/eval_perplexity": eval_stats["perplexity"]}
+    )
     # Generation benchmark
     print('\nStarting generation...')
     gen_stats = benchmark_generation(model, tokenizer)
@@ -437,11 +450,6 @@ def main(arch, data, n_epochs):
     # Results
     wandb.log(
         {
-            "summary/train_avg_loss": train_stats["avg_loss"],
-            'summary/train_avg_nll': train_stats['avg_nll'],
-            "summary/tokens_per_sec": train_stats["tokens_per_sec"],
-            "summary/eval_nll": eval_stats["eval_nll"],
-            "summary/eval_perplexity": eval_stats["perplexity"],
             "summary/gen_tokens_per_sec": gen_stats["gen_tokens_per_sec"],
             "summary/gen_ms_per_token": gen_stats["gen_ms_per_token"],
         }
@@ -455,11 +463,6 @@ def main(arch, data, n_epochs):
     print(f"Gen ms / token    : {gen_stats['gen_ms_per_token']:.2f}")
     print("==========================================")
 
-    # Save model
-    torch.save(model.state_dict(), f'{PATH}-{arch[:3]}-{data}-mod.pt')
-    wandb.save(f'{PATH}-{arch[:3]}-{data}-mod.pt')
-    
-    wandb.finish()
 
     # print("\n================ RESULTS ================")
     # print(f"Train loss           : {train_stats['train_loss']:.4f}")
