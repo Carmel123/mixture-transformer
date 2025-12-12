@@ -399,6 +399,10 @@ def main(arch, data, n_epochs, evaluate_only, model_path):
         train_stats = train(model, train_loader, optimizer, n_epochs, arch)
         run.log(train_stats)
 
+        wandb.log({"summary/train_avg_loss": train_stats["avg_loss"],
+            'summary/train_avg_nll': train_stats['avg_nll'],
+            "summary/tokens_per_sec": train_stats["tokens_per_sec"]})
+
         # Save model
         torch.save(model.state_dict(), f'{PATH}{architecture[:3]}-{data}-mod.pt')
         wandb.save(f'{PATH}{architecture[:3]}-{data}-mod.pt')
@@ -413,9 +417,7 @@ def main(arch, data, n_epochs, evaluate_only, model_path):
     run.log(eval_stats)
 
     wandb.log(
-        {"summary/train_avg_loss": train_stats["avg_loss"],
-            'summary/train_avg_nll': train_stats['avg_nll'],
-            "summary/tokens_per_sec": train_stats["tokens_per_sec"],
+        {
             "summary/eval_nll": eval_stats["eval_nll"],
             "summary/eval_perplexity": eval_stats["perplexity"]}
     )
