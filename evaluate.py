@@ -418,7 +418,7 @@ def main(arch, data, n_epochs, evaluate_only, model_path):
 
     wandb.log(
         {
-            "summary/eval_nll": eval_stats["eval_nll"],
+            "summary/eval_nll": eval_stats["eval_avg_nll"],
             "summary/eval_perplexity": eval_stats["perplexity"]}
     )
     # Generation benchmark
