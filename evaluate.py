@@ -405,7 +405,7 @@ def main(arch, data, n_epochs, evaluate_only, model_path):
     
     # Load model
     if evaluate_only == 1:
-        model.load_state_dict(torch.load(f'{PATH}-{architecture[:3]}-{data}-mod.pt', weights_only=True))
+        model.load_state_dict(torch.load(f'{PATH}{architecture[:3]}-{data}-mod.pt', weights_only=True))
 
     # Evaluation benchmark
     print("\nStarting evaluation...")
