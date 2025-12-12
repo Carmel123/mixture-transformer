@@ -292,7 +292,7 @@ def benchmark_generation(model, tokenizer):
 # Main
 # -----------------------------
 
-def main(arch, data, n_epochs):
+def main(arch, data, n_epochs, evaluate_only, model_path):
 
     architecture = "Mix-Transformer"
     if arch == 1:
@@ -309,6 +309,7 @@ def main(arch, data, n_epochs):
         "architecture": architecture,
         "dataset": data,
         "train_steps": TRAIN_STEPS,
+        "evaluate_only": evaluate_only  
     },)
 
     # Model config
@@ -354,32 +355,13 @@ def main(arch, data, n_epochs):
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=LR)
 
-    # Random Data
+    # Random Data - might not work
     if data == 'rand':
-        train_ds = RandomTokenDataset(
-            num_samples=10_000,
-            block_size=BLOCK_SIZE,
-            vocab_size=VOCAB_SIZE,
-        )
-        eval_ds = RandomTokenDataset(
-            num_samples=2_000,
-            block_size=BLOCK_SIZE,
-            vocab_size=VOCAB_SIZE,
-        )
-
-        train_loader = DataLoader(
-            train_ds,
-            batch_size=BATCH_SIZE,
-            shuffle=True,
-            pin_memory=True,
-        )
-
-        eval_loader = DataLoader(
-            eval_ds,
-            batch_size=BATCH_SIZE,
-            shuffle=False,
-            pin_memory=True,
-        )
+        if evaluate_only == 0:
+            train_ds = RandomTokenDataset(num_samples=10_000, block_size=BLOCK_SIZE, vocab_size=VOCAB_SIZE)
+            train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, pin_memory=True)
+        eval_ds = RandomTokenDataset(num_samples=2_000, block_size=BLOCK_SIZE, vocab_size=VOCAB_SIZE)
+        eval_loader = DataLoader(eval_ds, batch_size=BATCH_SIZE, shuffle=False, pin_memory=True)
     
     # Wiki Data
     if data == 'wiki':
@@ -388,20 +370,12 @@ def main(arch, data, n_epochs):
         tokenizer = build_tokenizer(
             dataset['train'], vocab_size=VOCAB_SIZE
         )
-        train_ds = WikiTextDataset(
-            dataset['train'],
-            tokenizer=tokenizer,
-            block_size=BLOCK_SIZE
-        )
+        if evaluate_only == 0:
+            train_ds = WikiTextDataset(dataset['train'], tokenizer=tokenizer, block_size=BLOCK_SIZE)
+            train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
 
-        eval_ds = WikiTextDataset(
-            dataset['validation'],
-            tokenizer=tokenizer,
-            block_size=BLOCK_SIZE
-        )
-
-    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
-    eval_loader = DataLoader(eval_ds, batch_size=BATCH_SIZE)
+        eval_ds = WikiTextDataset(dataset['validation'], tokenizer=tokenizer, block_size=BLOCK_SIZE)
+        eval_loader = DataLoader(eval_ds, batch_size=BATCH_SIZE)
 
     # Warmup
     print("Warming up...")
@@ -421,15 +395,18 @@ def main(arch, data, n_epochs):
     torch.cuda.synchronize() if DEVICE == "cuda" else None
 
     # Training benchmark
-    print("\nStarting training benchmark...")
-    train_stats = train(model, train_loader, optimizer, n_epochs, arch)
-    run.log(train_stats)
+    if evaluate_only == 0:
+        print("\nStarting training benchmark...")
+        train_stats = train(model, train_loader, optimizer, n_epochs, arch)
+        run.log(train_stats)
 
-    # Save model
-    torch.save(model.state_dict(), f'{PATH}-{architecture[:3]}-{data}-mod.pt')
-    wandb.save(f'{PATH}-{architecture[:3]}-{data}-mod.pt')
+        # Save model
+        torch.save(model.state_dict(), f'{PATH}{architecture[:3]}-{data}-mod.pt')
+        wandb.save(f'{PATH}{architecture[:3]}-{data}-mod.pt')
     
-    wandb.finish()
+    # Load model
+    if evaluate_only == 1:
+        model.load_state_dict(torch.load(f'{PATH}{architecture[:3]}-{data}-mod.pt', weights_only=True))
 
     # Evaluation benchmark
     print("\nStarting evaluation...")
@@ -474,6 +451,8 @@ def main(arch, data, n_epochs):
     # print(f"Eval time (s)        : {eval_stats['eval_time_sec']:.2f}")
     # print("=========================================")
 
+    wandb.finish()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Dataset creation")
@@ -485,7 +464,13 @@ if __name__ == "__main__":
                         help='wiki or rand')
     
     parser.add_argument('--epochs', default=5, type=int)
+
+    parser.add_argument('--evaluate_only', default = 0, type=int,
+                        help='0 - train and evaluate, 1 - evaluate (need to include path to model weights)')
+    
+    parser.add_argument('--model_path', default= '', type=str,
+                        help='path to model weights, only used if evaluate_only is true')
     
     args = parser.parse_args()
 
-    main(args.arch, args.data, args.epochs)
+    main(args.arch, args.data, args.epochs, args.evaluate_only, args.model_path)
