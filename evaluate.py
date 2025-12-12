@@ -370,9 +370,8 @@ def main(arch, data, n_epochs, evaluate_only, model_path):
         tokenizer = build_tokenizer(
             dataset['train'], vocab_size=VOCAB_SIZE
         )
-        if evaluate_only == 0:
-            train_ds = WikiTextDataset(dataset['train'], tokenizer=tokenizer, block_size=BLOCK_SIZE)
-            train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
+        train_ds = WikiTextDataset(dataset['train'], tokenizer=tokenizer, block_size=BLOCK_SIZE)
+        train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
 
         eval_ds = WikiTextDataset(dataset['validation'], tokenizer=tokenizer, block_size=BLOCK_SIZE)
         eval_loader = DataLoader(eval_ds, batch_size=BATCH_SIZE)
