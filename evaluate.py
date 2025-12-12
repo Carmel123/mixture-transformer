@@ -426,8 +426,8 @@ def main(arch, data, n_epochs):
     run.log(train_stats)
 
     # Save model
-    torch.save(model.state_dict(), f'{PATH}-{arch[:3]}-{data}-mod.pt')
-    wandb.save(f'{PATH}-{arch[:3]}-{data}-mod.pt')
+    torch.save(model.state_dict(), f'{PATH}-{architecture[:3]}-{data}-mod.pt')
+    wandb.save(f'{PATH}-{architecture[:3]}-{data}-mod.pt')
     
     wandb.finish()
 
