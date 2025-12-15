@@ -16,6 +16,13 @@ from attn_transformer import MixTransformer, MixTransformerConfig
 
 from ffn_transformer import FFNTransformer, FFNTransformerConfig
 
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+
+torch.backends.cuda.enable_flash_sdp = True
+torch.backends.cuda.enable_mem_efficient_sdp = True
+torch.backends.cuda.enable_math_sdp = False
+
 # -----------------------------
 # Configuration
 # -----------------------------
@@ -23,7 +30,7 @@ from ffn_transformer import FFNTransformer, FFNTransformerConfig
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DTYPE = torch.bfloat16 if DEVICE == "cuda" else torch.float32
 
-PROJECT = "mixture-transformer"
+PROJECT = "mixture-project"
 
 VOCAB_SIZE = 32000
 BLOCK_SIZE = 1024
@@ -365,7 +372,8 @@ def main(arch, data, n_epochs, evaluate_only, model_path):
     
     # Wiki Data
     if data == 'wiki':
-        dataset = load_dataset('wikitext', "wikitext-103-raw-v1")
+        # dataset = load_dataset('wikitext', "wikitext-103-raw-v1")
+        dataset = load_dataset('wikitext', 'wikitext-2-raw-v1')
 
         tokenizer = build_tokenizer(
             dataset['train'], vocab_size=VOCAB_SIZE
@@ -451,9 +459,7 @@ def main(arch, data, n_epochs, evaluate_only, model_path):
     # print(f"Perplexity           : {eval_stats['perplexity']:.2f}")
     # print(f"Eval time (s)        : {eval_stats['eval_time_sec']:.2f}")
     # print("=========================================")
-
     wandb.finish()
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Dataset creation")
