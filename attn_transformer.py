@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from torch.nn import functional as F
-from logging import log_moe_stats
+from logger import log_moe_stats
 
 from liger_kernel.transformers import LigerRMSNorm, liger_rotary_pos_emb, LigerFusedLinearCrossEntropyLoss
 from liger_kernel.ops.swiglu import LigerSiLUMulFunction
