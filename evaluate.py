@@ -39,7 +39,8 @@ BATCH_SIZE = 32
 
 # TRAIN_STEPS = 250
 TRAIN_STEPS = 120000
-WARMUP_STEPS = 100
+WARMUP_STEPS = 2000
+TOT_STEPS = TRAIN_STEPS + WARMUP_STEPS
 EVAL_STEPS = 50
 LOG_EVERY = 100
 
@@ -142,14 +143,15 @@ def train(model, dataloader, optimizer, n_epochs, arch):
     total_tokens = 0
     total_loss = 0.0
 
-    global_step = 0
+    global_step = WARMUP_STEPS
 
     for epoch in range(n_epochs):
         for step, batch in enumerate(dataloader):
-            if global_step >= TRAIN_STEPS:
+            if global_step >= TOT_STEPS:
                 break
 
             global_step += 1
+            is_warmup = global_step < WARMUP_STEPS
 
             x = batch['input_ids'].to(DEVICE)
             y = batch['labels'].to(DEVICE)
@@ -159,7 +161,9 @@ def train(model, dataloader, optimizer, n_epochs, arch):
             if arch == 1:
                 loss = model(x, labels=y)
             else:
-                loss, loss_dict = model(x, labels=y)
+                loss, loss_dict = model(x, labels=y, 
+                                        is_warmup = is_warmup, 
+                                        global_step = global_step)
             loss.backward()
             optimizer.step()
 
@@ -393,7 +397,7 @@ def main(arch, data, n_epochs, evaluate_only, model_path):
 
     for _ in range(WARMUP_STEPS):
         if arch == 1:
-            loss = model(x, labels=y)
+            loss = model(x, global_step, labels=y)
         else:
             loss, _ = model(x, labels=y)
         loss.backward()

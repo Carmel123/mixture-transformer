@@ -17,6 +17,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from torch.nn import functional as F
+from logging import log_moe_stats
 
 from liger_kernel.transformers import LigerRMSNorm, liger_rotary_pos_emb, LigerFusedLinearCrossEntropyLoss
 from liger_kernel.ops.swiglu import LigerSiLUMulFunction
@@ -68,7 +69,8 @@ class MixTransformerConfig:
     # for gating
     n_expert: int = 2
     dropout_rate: float = 0.1
-    aux_weight: float = 0.01
+    aux_weight: float = 1.0
+    aux_warmup_weight: float = 0.1
 
     # optional
     use_fused_ops: bool = False
@@ -137,7 +139,9 @@ class MixTransformer(nn.Module):
 
     def forward(
         self,
-        input_ids: torch.LongTensor, 
+        input_ids: torch.LongTensor,
+        is_warmup: bool,
+        global_step: int, 
         labels: Optional[torch.LongTensor] = None, 
         input_pos: Optional[Tensor] = None, 
         mask: Optional[BlockMask] = None
@@ -159,7 +163,9 @@ class MixTransformer(nn.Module):
         x = self.wte(input_ids)
         tot_aux_loss = torch.tensor(0.0, device=x.device)
         for i, layer in enumerate(self.layers):
-            x, aux_loss = layer(x, cos, sin, mask=mask, input_pos=input_pos)
+            x, aux_loss = layer(x, cos, sin, mask=mask, 
+                                input_pos=input_pos, global_step = global_step,
+                                is_warmup = is_warmup)
             tot_aux_loss += aux_loss
         
         x = self.norm(x)
@@ -177,7 +183,9 @@ class MixTransformer(nn.Module):
                                         logits.size(-1)),
                                         labels.view(-1),
                                         ignore_index=-100)
-                loss = lm_loss + self.config.aux_weight * tot_aux_loss
+                
+                lb_weight = self.config.aux_warmup_weight if is_warmup else self.config.aux_weight
+                loss = lm_loss + lb_weight * tot_aux_loss
                 return loss, {'lm_loss': lm_loss.detach(), 'aux_loss': tot_aux_loss.detach()}
         
         logits = self.output(x)
@@ -205,14 +213,27 @@ class MixtureTransformerBlock(nn.Module):
             self.ffn_norm = RMSNorm(config.dim, eps=config.norm_eps)
             self.attention_norm = RMSNorm(config.dim, eps=config.norm_eps)
 
-    def forward(self, x: Tensor, cos: Tensor, sin: Tensor, is_causal: Optional[bool] = True, mask: Optional[BlockMask] = None, input_pos: Optional[Tensor] = None) -> Tensor:
+    def forward(self, x: Tensor, cos: Tensor, sin: Tensor,
+                is_warmup: bool,
+                global_step: int,
+                is_causal: Optional[bool] = True, 
+                mask: Optional[BlockMask] = None, 
+                input_pos: Optional[Tensor] = None) -> Tensor:
         aux_loss = torch.tensor(0.0, device=x.device)
 
         # weights from router
-        weights = self.router(x)
+        weights = self.router(x, is_warmup)
         usage = weights.mean(dim=(0, 1))
         #  print(usage.detach().cpu())
         aux_loss =  -torch.sum(usage * torch.log(usage + 1e-9))
+
+        log_moe_stats(
+            gate_probs=weights,
+            layer_idx=self.layer_idx,
+            step=global_step,
+            log_interval=100,
+            is_warmup=is_warmup
+        )
         
         # expert outputs
         exp_out = torch.stack(
@@ -252,7 +273,7 @@ class Router(nn.Module):
             self.feed_forward = LLaMAMLP(config)
 
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor, is_warmup: bool) -> Tensor:
         x = torch.relu(self.layer1(x))
         x = self.dropout1(x)
 
@@ -263,8 +284,10 @@ class Router(nn.Module):
         x = self.layer3(x)
         x = self.leaky_relu2(x)
         x = self.dropout3(x)
-
-        return torch.softmax(self.layer4(x), dim=-1)
+        
+        temperature = 2.0 if is_warmup else 1.0
+        weights = torch.softmax(self.layer4(x) / temperature, dim=-1)
+        return weights
    
 
 class Attention(nn.Module):
