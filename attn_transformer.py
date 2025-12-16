@@ -196,6 +196,7 @@ class MixtureTransformerBlock(nn.Module):
     def __init__(self, config: MixTransformerConfig, layer_idx: int) -> None:
         super().__init__()
         self.config = config
+        self.layer_idx = layer_idx
 
         self.router = Router(config, layer_idx)
         # make more modular by replacing Attention
