@@ -236,7 +236,7 @@ def evaluate(model, dataloader, arch):
         if arch == 1:
             loss = model(x, labels=y)
         else:
-            loss, _ = model(x, labels=y)
+            loss, _ = model(x, labels=y, global_step=step)
 
         total_loss += loss.item() * x.numel()
         total_tokens += x.numel()
@@ -397,9 +397,9 @@ def main(arch, data, n_epochs, evaluate_only, model_path):
 
     for i in range(WARMUP_STEPS):
         if arch == 1:
-            loss = model(x, i, labels=y)
+            loss = model(x, labels=y)
         else:
-            loss, _ = model(x, labels=y)
+            loss, _ = model(x, i, labels=y)
         loss.backward()
         optimizer.zero_grad(set_to_none=True)
 
