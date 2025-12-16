@@ -47,12 +47,15 @@ def log_moe_stats(
     # Sequence position curves (these render as line plots)
     if not is_warmup:
         for e in range(E):
+            data = [[x, y] for (x, y) in zip(list(range(T)), pos_expert_mass[:, e].detach().cpu().tolist())]
+            table = wandb.Table(data=data, columns = ["x", "y"])
             wandb.log(
                 {
                     f"moe/layer_{layer_idx}/expert_{e}_by_position":
                         wandb.plot.line(
-                            xs=list(range(T)),
-                            ys=pos_expert_mass[:, e].detach().cpu().tolist(),
+                            table,
+                            "pos",
+                            "expert_mass",
                             keys=[f"expert_{e}"],
                             title=f"Layer {layer_idx} – Expert {e} vs Position",
                         )
