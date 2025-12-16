@@ -395,9 +395,9 @@ def main(arch, data, n_epochs, evaluate_only, model_path):
     x = batch["input_ids"].to(DEVICE)
     y = batch["labels"].to(DEVICE)
 
-    for _ in range(WARMUP_STEPS):
+    for i in range(WARMUP_STEPS):
         if arch == 1:
-            loss = model(x, global_step, labels=y)
+            loss = model(x, i, labels=y)
         else:
             loss, _ = model(x, labels=y)
         loss.backward()
