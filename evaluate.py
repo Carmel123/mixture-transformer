@@ -399,7 +399,7 @@ def main(arch, data, n_epochs, evaluate_only, model_path):
         if arch == 1:
             loss = model(x, labels=y)
         else:
-            loss, _ = model(x, global_step=i, labels=y)
+            loss, _ = model(x, global_step=i, is_warmup=True, labels=y)
         loss.backward()
         optimizer.zero_grad(set_to_none=True)
 
