@@ -107,7 +107,7 @@ class MixTransformer(nn.Module):
         self.output = nn.Linear(config.dim, config.padded_vocab_size, bias=False)
 
         if self.config.use_fused_ops:
-            # self.fused_linear_cross_entropy = LigerFusedLinearCrossEntropyLoss(ignore_index=-100)
+            self.fused_linear_cross_entropy = LigerFusedLinearCrossEntropyLoss(ignore_index=-100)
             print('using liger')
         
         # initialize weights
