@@ -69,8 +69,8 @@ class MixTransformerConfig:
     # for gating
     n_expert: int = 2
     dropout_rate: float = 0.1
-    aux_weight: float = 0.5
-    aux_warmup_weight: float = 0.1
+    aux_weight: float = 0.1
+    aux_warmup_weight: float = 0.01
 
     # optional
     use_fused_ops: bool = False
