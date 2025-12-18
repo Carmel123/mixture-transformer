@@ -89,9 +89,9 @@ def evaluate(model, dataloader, arch):
     perplexity = math.exp(avg_nll)
 
     return {
-        "eval_avg_nll": avg_nll,
+        "avg_nll": avg_nll,
         "perplexity": perplexity,
-        "eval_time_sec": elapsed,
+        "time_sec": elapsed,
     }
 
 # -------------------------------------------------
@@ -250,8 +250,8 @@ def main(arch, data, n_epochs, evaluate_only, model_path, use_fused_ops):
                                   WARMUP_STEPS, TOT_STEPS, LOG_EVERY, DEVICE)
         run.log(train_stats)
 
-        wandb.log({"summary/train_avg_loss": train_stats["train_avg_loss"],
-            'summary/train_avg_nll': train_stats['train_avg_nll'],
+        wandb.log({"summary/train_avg_loss": train_stats["avg_loss"],
+            'summary/train_avg_nll': train_stats['avg_nll'],
             "summary/tokens_per_sec": train_stats["tokens_per_sec"]})
 
         # Save model
@@ -269,7 +269,7 @@ def main(arch, data, n_epochs, evaluate_only, model_path, use_fused_ops):
 
     wandb.log(
         {
-            "summary/eval_nll": eval_stats["eval_avg_nll"],
+            "summary/eval_nll": eval_stats["avg_nll"],
             "summary/eval_perplexity": eval_stats["perplexity"]}
     )
     # Generation benchmark

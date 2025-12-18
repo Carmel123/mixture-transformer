@@ -81,13 +81,13 @@ def train_model(model, dataloader, optimizer, n_epochs, arch,
 
     out = {
         # "train_loss": total_loss / TRAIN_STEPS,
-        'train_avg_loss': total_loss / global_step,
-        'train_avg_nll': total_loss / total_tokens,
-        "train_time_sec": elapsed,
+        'avg_loss': total_loss / global_step,
+        'avg_nll': total_loss / total_tokens,
+        "time_sec": elapsed,
         "tokens_per_sec": tokens_per_sec,
     }
     if not arch:
-        out['train_lm_loss'] = loss_dict['lm_loss'].item()
-        out['train_aux_loss'] = loss_dict['aux_loss'].item()
+        out['lm_loss'] = loss_dict['lm_loss'].item()
+        out['aux_loss'] = loss_dict['aux_loss'].item()
 
     return out
