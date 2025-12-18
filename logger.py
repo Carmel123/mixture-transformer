@@ -64,7 +64,7 @@ def log_moe_stats(
                 f"moe/layer_{layer_idx}/experts_by_position": wandb.plot.line(
                     table,
                     x="pos",
-                    ys=[f"expert_{e}" for e in range(E)],
+                    y=[f"expert_{e}" for e in range(E)],
                     title=f"Layer {layer_idx} – Expert Routing by Position",
                 )
             },

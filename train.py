@@ -17,6 +17,8 @@ def train_model(model, dataloader, optimizer, n_epochs, arch,
     total_loss = 0.0
 
     global_step = warmup_steps
+    
+    get_shape = True
 
     for epoch in range(n_epochs):
         for step, batch in enumerate(dataloader):
@@ -28,6 +30,10 @@ def train_model(model, dataloader, optimizer, n_epochs, arch,
 
             x = batch['input_ids'].to(device)
             y = batch['labels'].to(device)
+        
+            if get_shape:
+                print(f'x shape: {x.shape}')
+                get_shape = False
 
             optimizer.zero_grad(set_to_none=True)
 

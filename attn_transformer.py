@@ -100,7 +100,7 @@ class MixTransformer(nn.Module):
         self.layers = nn.ModuleList(MixtureTransformerBlock(config, layer_idx=i) for i in range(config.n_layer))
         
         if self.config.use_fused_ops:
-            # self.norm = LigerRMSNorm(config.dim, eps=config.norm_eps)
+            self.norm = LigerRMSNorm(config.dim, eps=config.norm_eps)
             print('using liger')
         else:
             self.norm = RMSNorm(config.dim, eps=config.norm_eps)
@@ -316,9 +316,8 @@ class Attention(nn.Module):
 
         if self.config.use_qk_norm:
             if self.config.use_fused_ops:
-                print('using liger')
-                # self.q_norm = LigerRMSNorm(config.head_dim, eps=config.norm_eps)
-                # self.k_norm = LigerRMSNorm(config.head_dim, eps=config.norm_eps)
+                self.q_norm = LigerRMSNorm(config.head_dim, eps=config.norm_eps)
+                self.k_norm = LigerRMSNorm(config.head_dim, eps=config.norm_eps)
             else:
                 self.q_norm = RMSNorm(config.head_dim, eps=config.norm_eps)
                 self.k_norm = RMSNorm(config.head_dim, eps=config.norm_eps)
@@ -341,8 +340,7 @@ class Attention(nn.Module):
         q, k, v = map(lambda x: x.transpose(1, 2), (q, k, v))
 
         if self.config.use_fused_ops:
-            print('using liger')
-            # q, k = liger_rotary_pos_emb(q, k, cos, sin)
+            q, k = liger_rotary_pos_emb(q, k, cos, sin)
         else:
             q = apply_rope_emb(q, cos, sin, self.rope_n_elem) # (B, n_head, N, head_dim)
             k = apply_rope_emb(k, cos, sin, self.rope_n_elem) # (B, n_local_heads, N, head_dim)

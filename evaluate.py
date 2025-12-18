@@ -146,7 +146,7 @@ def benchmark_generation(model, tokenizer):
 # Main
 # -----------------------------
 
-def main(arch, data, n_epochs, evaluate_only, model_path):
+def main(arch, data, n_epochs, evaluate_only, model_path, use_fused_ops):
 
     architecture = "Mix-Transformer"
     if arch == 1:
@@ -158,7 +158,8 @@ def main(arch, data, n_epochs, evaluate_only, model_path):
     run = wandb.init(entity="anemia-pred", project=PROJECT,
     config={"learning_rate": LR, "architecture": architecture,
         "dataset": data, "train_steps": TRAIN_STEPS,
-        "evaluate_only": evaluate_only},)
+        "evaluate_only": evaluate_only,
+        "use_fused_ops": use_fused_ops},)
 
     # Model config
     if arch == 1: 
@@ -168,7 +169,7 @@ def main(arch, data, n_epochs, evaluate_only, model_path):
         n_layer=6,
         n_head=8,
         dim=768,
-        use_fused_ops=False,
+        use_fused_ops=use_fused_ops,
         )
         model = Transformer(config).to(DEVICE)
 
@@ -179,7 +180,7 @@ def main(arch, data, n_epochs, evaluate_only, model_path):
             n_layer=6,
             n_head=8,
             dim = 384, # for mix transformer
-            use_fused_ops=False,
+            use_fused_ops=use_fused_ops,
             n_expert=2 # for mix transformer
         )
         model = MixTransformer(config).to(DEVICE)
@@ -191,7 +192,7 @@ def main(arch, data, n_epochs, evaluate_only, model_path):
             n_layer=6,
             n_head=8,
             dim = 768,
-            use_fused_ops=False,
+            use_fused_ops=use_fused_ops,
             n_expert=2 # for mix transformer
         )
         model = MixTransformer(config).to(DEVICE)
@@ -311,6 +312,9 @@ if __name__ == "__main__":
     parser.add_argument('--model_path', default= '', type=str,
                         help='path to model weights, only used if evaluate_only is true')
     
+    parser.add_argument('--use_fused_ops', default=0, type=int,
+                        help="0 - use pytorch ops, 1 - use liger fused ops")
+    
     args = parser.parse_args()
 
-    main(args.arch, args.data, args.epochs, args.evaluate_only, args.model_path)
+    main(args.arch, args.data, args.epochs, args.evaluate_only, args.model_path, args.use_fused_ops)
