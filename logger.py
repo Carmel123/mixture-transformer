@@ -56,7 +56,7 @@ def log_moe_stats(
                             table,
                             "pos",
                             "expert_mass",
-                            keys=[f"expert_{e}"],
+                            # keys=[f"expert_{e}"],
                             title=f"Layer {layer_idx} – Expert {e} vs Position",
                         )
                 },
