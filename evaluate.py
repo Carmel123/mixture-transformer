@@ -117,7 +117,7 @@ def benchmark_generation(model, tokenizer, arch):
     print(f"Benchmark input ids: {input_ids}")
     print(f'Benchmark input pos: {input_pos}')
     if arch == 0:
-        logits, _ = model(input_ids, input_pos=input_pos, 
+        logits = model(input_ids, input_pos=input_pos, 
                           is_warmup=True, global_step=1)
     elif arch == 1:
         logits = model(input_ids, input_pos=input_pos)
@@ -135,7 +135,7 @@ def benchmark_generation(model, tokenizer, arch):
     for i in range(GEN_TOKENS):
         pos = decode_positions[i].unsqueeze(0)
         if arch == 0:
-            logits, _ = model(cur_token, input_pos=pos, 
+            logits = model(cur_token, input_pos=pos, 
                             is_warmup=True, global_step=1)
         elif arch == 1:
             logits = model(cur_token, input_pos=pos)
@@ -260,7 +260,7 @@ def main(arch, data, n_epochs, evaluate_only, model_path, use_fused_ops):
 
     # Training benchmark
     if evaluate_only == 0:
-        print("\nStarting training benchmark...")
+        print("\nStarting training...")
         train_stats = train_model(model, train_loader, optimizer, n_epochs, arch,
                                   WARMUP_STEPS, TOT_STEPS, LOG_EVERY, DEVICE)
         run.log(train_stats)
@@ -275,6 +275,7 @@ def main(arch, data, n_epochs, evaluate_only, model_path, use_fused_ops):
     
     # Load model
     if evaluate_only == 1:
+        print("\nLoading model...")
         model.load_state_dict(torch.load(f'{PATH}{architecture[:3]}-{data}-mod.pt', weights_only=True))
 
     # Evaluation benchmark
