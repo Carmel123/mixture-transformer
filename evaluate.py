@@ -114,6 +114,8 @@ def benchmark_generation(model, tokenizer, arch):
     )
 
     input_pos = torch.arange(GEN_WARMUP, device=DEVICE)
+    print(f"Benchmark input ids: {input_ids}")
+    print(f'Benchmark input pos: {input_pos}')
     if arch == 0:
         logits, _ = model(input_ids, input_pos=input_pos, 
                           is_warmup=True, global_step=1)
@@ -250,8 +252,6 @@ def main(arch, data, n_epochs, evaluate_only, model_path, use_fused_ops):
         if arch == 1:
             loss = model(x, labels=y)
         else:
-            print(x)
-            print(y)
             loss, _ = model(x, global_step=i, is_warmup=True, labels=y)
         loss.backward()
         optimizer.zero_grad(set_to_none=True)
@@ -259,7 +259,7 @@ def main(arch, data, n_epochs, evaluate_only, model_path, use_fused_ops):
     torch.cuda.synchronize() if DEVICE == "cuda" else None
 
     # Training benchmark
-    if not evaluate_only:
+    if evaluate_only == 0:
         print("\nStarting training benchmark...")
         train_stats = train_model(model, train_loader, optimizer, n_epochs, arch,
                                   WARMUP_STEPS, TOT_STEPS, LOG_EVERY, DEVICE)
@@ -274,7 +274,7 @@ def main(arch, data, n_epochs, evaluate_only, model_path, use_fused_ops):
         wandb.save(f'{PATH}{architecture[:3]}-{data}-mod.pt')
     
     # Load model
-    if evaluate_only:
+    if evaluate_only == 1:
         model.load_state_dict(torch.load(f'{PATH}{architecture[:3]}-{data}-mod.pt', weights_only=True))
 
     # Evaluation benchmark
