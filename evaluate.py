@@ -45,6 +45,7 @@ WARMUP_STEPS = 200
 TOT_STEPS = TRAIN_STEPS + WARMUP_STEPS
 EVAL_STEPS = 50
 LOG_EVERY = 100
+LAYERS = 3
 
 LR = 3e-4
 
@@ -166,6 +167,7 @@ def main(arch, data, n_epochs, evaluate_only, model_path, use_fused_ops):
         config = TransformerConfig(
         block_size=BLOCK_SIZE,
         vocab_size=VOCAB_SIZE,
+        n_layer=LAYERS,
         n_layer=6,
         n_head=8,
         dim=768,
@@ -177,6 +179,7 @@ def main(arch, data, n_epochs, evaluate_only, model_path, use_fused_ops):
         config = MixTransformerConfig(
             block_size=BLOCK_SIZE,
             vocab_size=VOCAB_SIZE,
+            n_layer=LAYERS,
             n_layer=6,
             n_head=8,
             dim = 384, # for mix transformer
@@ -237,6 +240,8 @@ def main(arch, data, n_epochs, evaluate_only, model_path, use_fused_ops):
         if arch == 1:
             loss = model(x, labels=y)
         else:
+            print(x)
+            print(y)
             loss, _ = model(x, global_step=i, is_warmup=True, labels=y)
         loss.backward()
         optimizer.zero_grad(set_to_none=True)
