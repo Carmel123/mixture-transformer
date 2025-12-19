@@ -80,7 +80,7 @@ def evaluate(model, dataloader, arch):
         if arch == 1:
             loss = model(x, labels=y)
         else:
-            loss, _ = model(x, labels=y, global_step=step)
+            loss, _ = model(x, labels=y, global_step=step, is_warmup=False)
 
         total_loss += loss.item() * x.numel()
         total_tokens += x.numel()
@@ -100,7 +100,7 @@ def evaluate(model, dataloader, arch):
 # -------------------------------------------------
 
 @torch.no_grad()
-def benchmark_generation(model, tokenizer):
+def benchmark_generation(model, tokenizer, arch):
     model.eval()
 
     input_ids = torch.randint(
@@ -114,7 +114,11 @@ def benchmark_generation(model, tokenizer):
     )
 
     input_pos = torch.arange(GEN_WARMUP, device=DEVICE)
-    logits = model(input_ids, input_pos=input_pos)
+    if arch == 0:
+        logits, _ = model(input_ids, input_pos=input_pos, 
+                          is_warmup=True, global_step=1)
+    elif arch == 1:
+        logits = model(input_ids, input_pos=input_pos)
 
     torch.cuda.synchronize() if DEVICE == "cuda" else None
     decode_positions = torch.arange(
@@ -128,7 +132,11 @@ def benchmark_generation(model, tokenizer):
     cur_token = logits[:, -1].argmax(dim=-1, keepdim=True)
     for i in range(GEN_TOKENS):
         pos = decode_positions[i].unsqueeze(0)
-        logits = model(cur_token, input_pos=pos)
+        if arch == 0:
+            logits, _ = model(cur_token, input_pos=pos, 
+                            is_warmup=True, global_step=1)
+        elif arch == 1:
+            logits = model(cur_token, input_pos=pos)
         cur_token = torch.argmax(logits[:, -1:], dim=-1)
 
     torch.cuda.synchronize() if DEVICE == "cuda" else None
@@ -281,7 +289,7 @@ def main(arch, data, n_epochs, evaluate_only, model_path, use_fused_ops):
     )
     # Generation benchmark
     print('\nStarting generation...')
-    gen_stats = benchmark_generation(model, tokenizer)
+    gen_stats = benchmark_generation(model, tokenizer, arch)
 
     # Results
     wandb.log(
