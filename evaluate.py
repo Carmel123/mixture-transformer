@@ -160,7 +160,8 @@ def main(arch, data, n_epochs, evaluate_only, model_path, use_fused_ops):
     config={"learning_rate": LR, "architecture": architecture,
         "dataset": data, "train_steps": TRAIN_STEPS,
         "evaluate_only": evaluate_only,
-        "use_fused_ops": use_fused_ops},)
+        "use_fused_ops": use_fused_ops,
+        "n_layer": LAYERS},)
 
     # Model config
     if arch == 1: 
@@ -168,7 +169,7 @@ def main(arch, data, n_epochs, evaluate_only, model_path, use_fused_ops):
         block_size=BLOCK_SIZE,
         vocab_size=VOCAB_SIZE,
         n_layer=LAYERS,
-        n_layer=6,
+        # n_layer=6,
         n_head=8,
         dim=768,
         use_fused_ops=use_fused_ops,
@@ -180,7 +181,7 @@ def main(arch, data, n_epochs, evaluate_only, model_path, use_fused_ops):
             block_size=BLOCK_SIZE,
             vocab_size=VOCAB_SIZE,
             n_layer=LAYERS,
-            n_layer=6,
+            # n_layer=6,
             n_head=8,
             dim = 384, # for mix transformer
             use_fused_ops=use_fused_ops,
@@ -192,7 +193,8 @@ def main(arch, data, n_epochs, evaluate_only, model_path, use_fused_ops):
         config = FFNTransformerConfig(
             block_size=BLOCK_SIZE,
             vocab_size=VOCAB_SIZE,
-            n_layer=6,
+            n_layer=LAYERS,
+            # n_layer=6,
             n_head=8,
             dim = 768,
             use_fused_ops=use_fused_ops,
