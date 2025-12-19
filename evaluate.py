@@ -35,7 +35,7 @@ DTYPE = torch.bfloat16 if DEVICE == "cuda" else torch.float32
 PROJECT = "mixture-project"
 
 VOCAB_SIZE = 32000
-BLOCK_SIZE = 1024
+BLOCK_SIZE = 256
 # BATCH_SIZE = 4
 BATCH_SIZE = 32
 
@@ -46,6 +46,7 @@ TOT_STEPS = TRAIN_STEPS + WARMUP_STEPS
 EVAL_STEPS = 50
 LOG_EVERY = 100
 LAYERS = 3
+# MAX_SEQ_LEN = 256
 
 LR = 3e-4
 
@@ -235,6 +236,7 @@ def main(arch, data, n_epochs, evaluate_only, model_path, use_fused_ops):
         tokenizer = build_tokenizer(
             dataset['train'], vocab_size=VOCAB_SIZE
         )
+        tokenizer.model_max_length = MAX_SEQ_LEN
         train_ds = WikiTextDataset(dataset['train'], tokenizer=tokenizer, block_size=BLOCK_SIZE)
         train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
 
