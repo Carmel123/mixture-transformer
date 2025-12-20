@@ -236,7 +236,7 @@ def main(arch, data, n_epochs, evaluate_only, model_path, use_fused_ops):
         tokenizer = build_tokenizer(
             dataset['train'], vocab_size=VOCAB_SIZE
         )
-        tokenizer.model_max_length = MAX_SEQ_LEN
+        # tokenizer.model_max_length = MAX_SEQ_LEN
         train_ds = WikiTextDataset(dataset['train'], tokenizer=tokenizer, block_size=BLOCK_SIZE)
         train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
 
