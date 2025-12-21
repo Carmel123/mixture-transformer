@@ -223,7 +223,9 @@ class Attention(nn.Module):
                 self.q_norm = RMSNorm(config.head_dim, eps=config.norm_eps)
                 self.k_norm = RMSNorm(config.head_dim, eps=config.norm_eps)
 
-    def forward(self, x: Tensor, cos: Tensor, sin: Tensor, is_causal: Optional[bool] = True, mask: Optional[BlockMask] = None, input_pos: Optional[Tensor] = None) -> Tensor:
+    def forward(self, x: Tensor, cos: Tensor, sin: Tensor, 
+                is_causal: Optional[bool] = True, mask: Optional[BlockMask] = None,
+                input_pos: Optional[Tensor] = None) -> Tensor:
         
         bsz, seqlen, _ = x.shape
 
@@ -243,8 +245,8 @@ class Attention(nn.Module):
         if self.config.use_fused_ops:
             q, k = liger_rotary_pos_emb(q, k, cos, sin)
         else:
-            q = apply_rope_emb(q, cos, sin, self.rope_n_elem) # (B, n_head, N, head_dim)
-            k = apply_rope_emb(k, cos, sin, self.rope_n_elem) # (B, n_local_heads, N, head_dim)
+            q = apply_rope_emb(q, cos, sin, self.rope_n_elem, input_pos=input_pos) # (B, n_head, N, head_dim)
+            k = apply_rope_emb(k, cos, sin, self.rope_n_elem, input_pos=input_pos) # (B, n_local_heads, N, head_dim)
 
         if self.kv_cache is not None and input_pos is not None:
             k, v = self.kv_cache.update(input_pos, k, v)
@@ -321,11 +323,28 @@ class RMSNorm(torch.nn.Module):
         torch.nn.init.ones_(self.weight)
 
 @torch.amp.autocast("cuda", enabled=False)
-def apply_rope_emb(x: Tensor, cos: Tensor, sin: Tensor, rope_n_elem: int) -> Tensor:
+def apply_rope_emb(x: Tensor, cos: Tensor, sin: Tensor, rope_n_elem: int, 
+                   input_pos: Optional[int] = None,) -> Tensor:
     ### this does the following:
     # q_roped = apply_rope(q[..., :rope_n_elem], cos, sin)
     # q = torch.cat((q_roped, q[..., rope_n_elem:]), dim=-1)  # (B, nh_q, T, hs)
-    
+    # x: (B, nh, T, hs)
+    # cos/sin: (1, max_seq_len, rope_n_elem)
+
+    T = x.size(-2)
+
+    if input_pos is not None:
+        # absolute-position slice for autoregressive decoding
+        assert input_pos + T <= cos.shape[1], (
+            f"RoPE position {input_pos}+{T} exceeds cache length {cos.shape[1]}"
+        )
+        cos = cos[:, input_pos : input_pos + T, :rope_n_elem]
+        sin = sin[:, input_pos : input_pos + T, :rope_n_elem]
+    else:
+        # training / full-sequence path
+        cos = cos[:, :T, :rope_n_elem]
+        sin = sin[:, :T, :rope_n_elem]
+
     x_roped = apply_rope(x[..., :rope_n_elem], cos, sin)
     x = torch.cat((x_roped, x[..., rope_n_elem:]), dim=-1)  # (B, nh_q, T, hs)
     return x
