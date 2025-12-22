@@ -328,34 +328,37 @@ def apply_rope_emb(x: Tensor, cos: Tensor, sin: Tensor, rope_n_elem: int,
     ### this does the following:
     # q_roped = apply_rope(q[..., :rope_n_elem], cos, sin)
     # q = torch.cat((q_roped, q[..., rope_n_elem:]), dim=-1)  # (B, nh_q, T, hs)
+    x_roped = apply_rope(x[..., :rope_n_elem], cos, sin)
+    x = torch.cat((x_roped, x[..., rope_n_elem:]), dim=-1)  # (B, nh_q, T, hs)
+
     # x: (B, nh, T, hs)
     # cos/sin: (1, max_seq_len, rope_n_elem)
 
-    T = x.size(-2)
+    # T = x.size(-2)
 
-    if input_pos is None:
-        # Full-sequence mode (training / warmup / prefill)
-        # Positions are implicitly [0 .. T-1]
-        cos = cos[:, :T, :rope_n_elem]
-        sin = sin[:, :T, :rope_n_elem]
+    # if input_pos is None:
+    #     # Full-sequence mode (training / warmup / prefill)
+    #     # Positions are implicitly [0 .. T-1]
+    #     cos = cos[:, :T, :rope_n_elem]
+    #     sin = sin[:, :T, :rope_n_elem]
 
-    else:
-        # Incremental decoding mode
-        # input_pos must be a single absolute position
-        if torch.is_tensor(input_pos):
-            input_pos = int(input_pos.flatten()[0].item())
-        else:
-            input_pos = int(input_pos)
+    # else:
+    #     # Incremental decoding mode
+    #     # input_pos must be a single absolute position
+    #     if torch.is_tensor(input_pos):
+    #         input_pos = int(input_pos.flatten()[0].item())
+    #     else:
+    #         input_pos = int(input_pos)
 
-        # In decode mode we only ever rotate one token
-        assert T == 1, "input_pos should only be used when decoding a single token"
+    #     # In decode mode we only ever rotate one token
+    #     assert T == 1, "input_pos should only be used when decoding a single token"
 
-        assert input_pos < cos.shape[1], (
-            f"RoPE position {input_pos} exceeds cache length {cos.shape[1]}"
-        )
+    #     assert input_pos < cos.shape[1], (
+    #         f"RoPE position {input_pos} exceeds cache length {cos.shape[1]}"
+    #     )
 
-        cos = cos[:, input_pos : input_pos + 1, :rope_n_elem]
-        sin = sin[:, input_pos : input_pos + 1, :rope_n_elem]
+    #     cos = cos[:, input_pos : input_pos + 1, :rope_n_elem]
+    #     sin = sin[:, input_pos : input_pos + 1, :rope_n_elem]
 
     # if input_pos is not None:
     #     # normalize input_pos to a Python int
