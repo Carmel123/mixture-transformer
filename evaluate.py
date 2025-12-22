@@ -131,11 +131,12 @@ def benchmark_generation(model, tokenizer, arch):
         GEN_WARMUP + GEN_TOKENS,
         device=DEVICE
     )
-
+    print('Warmup complete')
     start = time.perf_counter()
 
     cur_token = logits[:, -1].argmax(dim=-1, keepdim=True)
     for i in range(GEN_TOKENS):
+        print(f'Generating token {i}')
         pos = decode_positions[i].unsqueeze(0)
         if arch == 0:
             logits = model(cur_token, input_pos=pos, 
