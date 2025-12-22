@@ -334,12 +334,18 @@ def apply_rope_emb(x: Tensor, cos: Tensor, sin: Tensor, rope_n_elem: int,
     T = x.size(-2)
 
     if input_pos is not None:
+        # normalize input_pos to a Python int
+        if torch.is_tensor(input_pos):
+            # common cases: shape (), (1,), or (B,)
+            input_pos_val = int(input_pos.flatten()[0].item())
+        else:
+            input_pos_val = int(input_pos)
         # absolute-position slice for autoregressive decoding
-        assert input_pos + T <= cos.shape[1], (
-            f"RoPE position {input_pos}+{T} exceeds cache length {cos.shape[1]}"
+        assert input_pos_val + T <= cos.shape[1], (
+            f"RoPE position {input_pos_val}+{T} exceeds cache length {cos.shape[1]}"
         )
-        cos = cos[:, input_pos : input_pos + T, :rope_n_elem]
-        sin = sin[:, input_pos : input_pos + T, :rope_n_elem]
+        cos = cos[:, input_pos_val : input_pos_val + T, :rope_n_elem]
+        sin = sin[:, input_pos_val : input_pos_val + T, :rope_n_elem]
     else:
         # training / full-sequence path
         cos = cos[:, :T, :rope_n_elem]
