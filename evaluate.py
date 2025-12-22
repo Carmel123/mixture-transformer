@@ -118,10 +118,12 @@ def benchmark_generation(model, tokenizer, arch):
     print(f"Benchmark input ids: {input_ids}")
     print(f'Benchmark input pos: {input_pos}')
     if arch == 0:
-        logits = model(input_ids, input_pos=input_pos, 
-                          is_warmup=True, global_step=1)
+        # logits = model(input_ids, input_pos=input_pos, 
+        #                   is_warmup=True, global_step=1)
+        logits = model(input_ids, is_warmup=True, global_step=1)
     elif arch == 1:
-        logits = model(input_ids, input_pos=input_pos)
+        # logits = model(input_ids, input_pos=input_pos)
+        logits = model(input_ids)
 
     torch.cuda.synchronize() if DEVICE == "cuda" else None
     decode_positions = torch.arange(

@@ -333,24 +333,47 @@ def apply_rope_emb(x: Tensor, cos: Tensor, sin: Tensor, rope_n_elem: int,
 
     T = x.size(-2)
 
-    if input_pos is not None:
-        # normalize input_pos to a Python int
-        if torch.is_tensor(input_pos):
-            # common cases: shape (), (1,), or (B,)
-            input_pos_val = int(input_pos.flatten()[0].item())
-        else:
-            input_pos_val = int(input_pos)
-        # absolute-position slice for autoregressive decoding
-        assert input_pos_val + T <= cos.shape[1], (
-            f"RoPE position {input_pos_val}+{T} exceeds cache length {cos.shape[1]}"
-        )
-        cos = cos[:, input_pos_val : input_pos_val + T, :rope_n_elem]
-        sin = sin[:, input_pos_val : input_pos_val + T, :rope_n_elem]
-    else:
-        # training / full-sequence path
+    if input_pos is None:
+        # Full-sequence mode (training / warmup / prefill)
+        # Positions are implicitly [0 .. T-1]
         cos = cos[:, :T, :rope_n_elem]
         sin = sin[:, :T, :rope_n_elem]
 
+    else:
+        # Incremental decoding mode
+        # input_pos must be a single absolute position
+        if torch.is_tensor(input_pos):
+            input_pos = int(input_pos.flatten()[0].item())
+        else:
+            input_pos = int(input_pos)
+
+        # In decode mode we only ever rotate one token
+        assert T == 1, "input_pos should only be used when decoding a single token"
+
+        assert input_pos < cos.shape[1], (
+            f"RoPE position {input_pos} exceeds cache length {cos.shape[1]}"
+        )
+
+        cos = cos[:, input_pos : input_pos + 1, :rope_n_elem]
+        sin = sin[:, input_pos : input_pos + 1, :rope_n_elem]
+
+    # if input_pos is not None:
+    #     # normalize input_pos to a Python int
+    #     if torch.is_tensor(input_pos):
+    #         # common cases: shape (), (1,), or (B,)
+    #         input_pos_val = int(input_pos.flatten()[0].item())
+    #     else:
+    #         input_pos_val = int(input_pos)
+    #     # absolute-position slice for autoregressive decoding
+    #     assert input_pos_val + T <= cos.shape[1], (
+    #         f"RoPE position {input_pos_val}+{T} exceeds cache length {cos.shape[1]}"
+    #     )
+    #     cos = cos[:, input_pos_val : input_pos_val + T, :rope_n_elem]
+    #     sin = sin[:, input_pos_val : input_pos_val + T, :rope_n_elem]
+    # else:
+    #     # training / full-sequence path
+    #     cos = cos[:, :T, :rope_n_elem]
+    #     sin = sin[:, :T, :rope_n_elem]*/
     x_roped = apply_rope(x[..., :rope_n_elem], cos, sin)
     x = torch.cat((x_roped, x[..., rope_n_elem:]), dim=-1)  # (B, nh_q, T, hs)
     return x
