@@ -50,7 +50,7 @@ LAYERS = 3
 
 LR = 3e-4
 
-GEN_TOKENS = 256
+GEN_TOKENS = 128
 GEN_WARMUP = 8
 
 PATH = '/scratch/clp9358/mixer-mixture/'
