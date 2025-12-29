@@ -45,7 +45,7 @@ WARMUP_STEPS = 200
 TOT_STEPS = TRAIN_STEPS + WARMUP_STEPS
 EVAL_STEPS = 50
 LOG_EVERY = 100
-LAYERS = 3
+LAYERS = 6
 # MAX_SEQ_LEN = 256
 
 LR = 3e-4
@@ -136,7 +136,7 @@ def benchmark_generation(model, tokenizer, arch):
 
     cur_token = logits[:, -1].argmax(dim=-1, keepdim=True)
     for i in range(GEN_TOKENS):
-        print(f'Generating token {i}')
+        # print(f'Generating token {i}')
         pos = decode_positions[i].unsqueeze(0)
         if arch == 0:
             logits = model(cur_token, input_pos=pos, 
